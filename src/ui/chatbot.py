@@ -1,4 +1,8 @@
 import streamlit as st
+from openai import OpenAI
+
+def get_openai_client():
+    return OpenAI(api_key=st.secrets["openai_api_key"])
 
 
 def main():
@@ -15,9 +19,15 @@ def main():
         with st.chat_message("user"):
             st.markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
+        client = get_openai_client()
+        response = client.responses.create(
+            model="gpt-4.1-nano",
+            input=st.session_state.messages,
+            instructions="ALWAYS RETURN 'Não sei', regardless of the input.",
+        )
 
-        # API call here.
-        response = f"Echo: {prompt}"
+        developer_message = response.output_text
+        st.session_state.messages.append({"role": "assistant", "content": developer_message})
 
-        with st.chat_message("assistant"):
-            st.markdown(response)
+        with st.chat_message("developer"):
+            st.markdown(developer_message)

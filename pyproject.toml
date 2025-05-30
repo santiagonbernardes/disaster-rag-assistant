@@ -7,4 +7,24 @@ authors = [
     { name = "Santiago Bernardes", email = "santiagobernardes@gmail.com" }
 ]
 requires-python = ">=3.13.3"
-dependencies = []
+dependencies = [
+    "langfuse>=2.60.7",
+    "openai>=1.82.1",
+    "streamlit>=1.45.1",
+]
+
+[tool.ruff.lint]
+select = [
+    # pycodestyle
+    "E",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+]

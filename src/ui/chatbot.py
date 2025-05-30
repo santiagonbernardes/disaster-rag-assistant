@@ -109,3 +109,6 @@ def main():
         st.session_state.prompt = get_prompt(st.session_state.user_profile)
 
     render_chat()
+
+
+main()

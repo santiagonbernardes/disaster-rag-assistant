@@ -1,0 +1,10 @@
+[project]
+name = "disaster-rag-assistant"
+version = "0.1.0"
+description = "An intelligent virtual assistant using RAG (Retrieval-Augmented Generation) architecture to provide personalized, contextual guidance for natural disaster response. Serves victims, residents, and families with real-time safety information, evacuation procedures, and emergency resources in Portuguese."
+readme = "README.md"
+authors = [
+    { name = "Santiago Bernardes", email = "santiagobernardes@gmail.com" }
+]
+requires-python = ">=3.13.3"
+dependencies = []

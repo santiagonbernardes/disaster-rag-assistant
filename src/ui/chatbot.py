@@ -20,7 +20,6 @@ def format_profile_options(option):
     return PROFILE_OPTIONS[option]["label"]
 
 
-@st.cache_resource(show_spinner=True)
 def get_prompt(profile):
     prompt_name = PROFILE_OPTIONS[profile]["prompt"]
     return langfuse_context.client_instance.get_prompt(prompt_name)
@@ -70,15 +69,14 @@ def render_chat_history():
 @observe
 def get_an_response(user_prompt):
     langfuse_context.update_current_observation(session_id=st.session_state.session_id)
-    input_prompt = st.session_state.prompt.compile()
-    instructions = input_prompt[0]["content"]
+    prompt_client = st.session_state.prompt
 
     return client().responses.create(
         model="gpt-4.1-nano",
         input=user_prompt,
-        instructions=instructions,
+        instructions=prompt_client.compile()[0]["content"],
         previous_response_id=st.session_state.previous_response_id,
-        langfuse_prompt=st.session_state.prompt,
+        langfuse_prompt=prompt_client,
     )
 
 

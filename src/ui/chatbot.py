@@ -1,7 +1,10 @@
-import streamlit as st
-from langfuse.openai import OpenAI
-from langfuse.decorators import observe, langfuse_context
 import uuid
+
+import streamlit as st
+from langfuse.decorators import langfuse_context, observe
+from langfuse.openai import OpenAI
+
+PROFILE_OPTIONS = {"victim": "Vítima", "resident": "Residente", "family": "Familiar"}
 
 
 @st.cache_resource
@@ -9,14 +12,38 @@ def client():
     return OpenAI(api_key=st.secrets["openai_api_key"])
 
 
+def format_profile_options(option):
+    return PROFILE_OPTIONS[option]
+
+
+def prompt_user_for_profile():
+    with st.form(key="user_profile_form"):
+        st.markdown("### 🚨 Assistente Virtual para Orientação em Desastres Naturais")
+        st.markdown(
+            "Olá! Sou seu assistente virtual especializado em orientações "
+            "para situações de emergência e desastres naturais."
+        )
+
+        select_box = st.selectbox(
+            "**Para melhor atendê-lo, por favor selecione seu perfil:**",
+            options=PROFILE_OPTIONS.keys(),
+            placeholder="Selecione seu perfil",
+            key="user_profile",
+            format_func=format_profile_options,
+        )
+
+        if st.form_submit_button("Iniciar o chat") and not select_box:
+            st.error("Por favor, selecione um perfil antes de continuar.")
+
+
 def render_chat_history():
     previous_response_id = st.session_state.previous_response_id
     if previous_response_id is None:
         return
 
-    all_messages = client().responses.input_items.list(
-        previous_response_id, order="asc"
-    ).data
+    all_messages = (
+        client().responses.input_items.list(previous_response_id, order="asc").data
+    )
 
     for message in all_messages:
         with st.chat_message(message.role):
@@ -24,6 +51,7 @@ def render_chat_history():
 
     with st.chat_message("assistant"):
         st.markdown(st.session_state.last_response)
+
 
 @observe
 def get_an_response(user_prompt):
@@ -39,18 +67,16 @@ def get_an_response(user_prompt):
 
 def main():
     st.title("Simple bot")
+    if "user_profile" not in st.session_state:
+        prompt_user_for_profile()
+        return
     if "previous_response_id" not in st.session_state:
         st.session_state.previous_response_id = None
     if "last_response" not in st.session_state:
         st.session_state.last_response = None
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid.uuid4().hex
-    if "user_profile" not in st.session_state:
-        st.session_state.user_profile = None
 
-    # if not st.session_state.user_profile:
-    #     st.session_state.user_profile = prompt_user_for_profile()
-    #     return
 
     render_chat_history()
 

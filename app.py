@@ -1,9 +1,10 @@
 import tomllib
 from pathlib import Path
 
-from src.ui.chatbot import main
-from langfuse.decorators import langfuse_context
 import streamlit as st  # Using ST to manage the secrets for now
+from langfuse.decorators import langfuse_context
+
+from src.ui.chatbot import main
 
 
 def get_app_version():

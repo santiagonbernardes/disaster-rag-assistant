@@ -1,3 +1,13 @@
+import sys
+
+# Fix for ChromaDB SQLite compatibility on Streamlit Cloud
+try:
+    import pysqlite3
+
+    sys.modules["sqlite3"] = pysqlite3
+except ImportError:
+    pass
+
 import chromadb
 import streamlit as st
 import tiktoken

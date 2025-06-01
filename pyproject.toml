@@ -8,9 +8,12 @@ authors = [
 ]
 requires-python = ">=3.13.3"
 dependencies = [
+    "chromadb>=1.0.11",
     "langfuse>=2.60.7",
+    "llama-cloud-services>=0.6.25",
     "openai>=1.82.1",
     "streamlit>=1.45.1",
+    "tiktoken>=0.9.0",
 ]
 
 [tool.ruff.lint]

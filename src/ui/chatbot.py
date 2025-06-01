@@ -1,5 +1,6 @@
 import uuid
 
+import chromadb
 import streamlit as st
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import OpenAI
@@ -14,6 +15,12 @@ PROFILE_OPTIONS = {
 @st.cache_resource(show_spinner=True)
 def client():
     return OpenAI(api_key=st.secrets["openai_api_key"])
+
+
+@st.cache_resource(show_spinner=True)
+def collection():
+    chroma = chromadb.PersistentClient(path=".db/chroma")
+    return chroma.get_or_create_collection(name="disaster-documents")
 
 
 def format_profile_options(option):
@@ -66,15 +73,58 @@ def render_chat_history():
         st.markdown(st.session_state.last_response)
 
 
+def get_retrieved_documents(user_prompt):
+    documents = retrieve_documents(user_prompt)
+    relevant_docs = get_relevant_documents(documents)
+
+    if not relevant_docs:
+        return ""
+
+    return "\n".join(
+        [f"Documento {i + 1}: {doc}" for i, doc in enumerate(relevant_docs)]
+    )
+
+
+@observe(name="retrieval")
+def retrieve_documents(user_prompt):
+    return collection().query(query_texts=user_prompt, n_results=2)
+
+
+@observe(name="retrieval_filtering")
+def get_relevant_documents(documents):
+    # How chroma measures distances:
+    # https://cookbook.chromadb.dev/faq/#distances-and-similarity
+    # 0 is identical. As far away from it, the more different the
+    # document is from the query.
+
+    SIMILARITY_THRESHOLD = 1.3
+    relevant_docs = []
+    distances_and_docs = zip(
+        documents["distances"][0], documents["documents"][0], strict=True
+    )
+
+    for distance, document in distances_and_docs:
+        if distance < SIMILARITY_THRESHOLD:
+            relevant_docs.append(document)
+
+    return relevant_docs
+
+
 @observe
 def get_an_response(user_prompt):
     langfuse_context.update_current_observation(session_id=st.session_state.session_id)
     prompt_client = st.session_state.prompt
 
+    retrieved_docs = get_retrieved_documents(user_prompt)
+
+    instruction = prompt_client.compile(retrieved_documents=retrieved_docs)[0][
+        "content"
+    ]
+
     return client().responses.create(
         model="gpt-4.1-nano",
         input=user_prompt,
-        instructions=prompt_client.compile()[0]["content"],
+        instructions=instruction,
         previous_response_id=st.session_state.previous_response_id,
         langfuse_prompt=prompt_client,
     )
@@ -109,3 +159,6 @@ def main():
         st.session_state.prompt = get_prompt(st.session_state.user_profile)
 
     render_chat()
+
+
+main()

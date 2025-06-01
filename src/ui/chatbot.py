@@ -108,13 +108,16 @@ def get_relevant_documents(documents):
 
     SIMILARITY_THRESHOLD = 1.3
     relevant_docs = []
-    distances_and_docs = zip(
-        documents["distances"][0], documents["documents"][0], strict=True
+    documents_data = zip(
+        documents["ids"][0],
+        documents["distances"][0],
+        documents["documents"][0],
+        strict=True,
     )
 
-    for distance, document in distances_and_docs:
+    for doc_id, distance, document in documents_data:
         if distance < SIMILARITY_THRESHOLD:
-            relevant_docs.append(document)
+            relevant_docs.append({"url": doc_id, "content": document})
 
     return relevant_docs
 

@@ -1,6 +1,6 @@
 [project]
 name = "disaster-rag-assistant"
-version = "0.2.0"
+version = "0.2.1"
 description = "An intelligent virtual assistant using RAG (Retrieval-Augmented Generation) architecture to provide personalized, contextual guidance for natural disaster response. Serves victims, residents, and families with real-time safety information, evacuation procedures, and emergency resources in Portuguese."
 readme = "README.md"
 authors = [

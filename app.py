@@ -25,6 +25,13 @@ if __name__ == "__main__":
         environment=env,
     )
 
+    st.set_page_config(
+        page_title="Disaster Knowledge Chatbot",
+        page_icon="🤖",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
     pages = [
         st.Page(
             "src/ui/chatbot.py",

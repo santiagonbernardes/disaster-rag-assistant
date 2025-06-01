@@ -42,8 +42,6 @@ class Document:
             content_bytes, extra_info={"file_name": file_name}
         )
         content = "\n".join(page.md for page in result.pages)
-        with open(f"{file_name.split('.')[0]}.md", "w") as f:
-            f.write(content)
         self._document_output = self._create_document(content)
 
     @classmethod

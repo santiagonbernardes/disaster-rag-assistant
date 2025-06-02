@@ -1,4 +1,6 @@
 import sys
+import time
+from datetime import datetime
 
 # Fix for ChromaDB SQLite compatibility on Streamlit Cloud
 try:
@@ -18,6 +20,20 @@ from src.repositories.document_cache import DocumentCache
 from src.retrieval.document import Document
 
 st.header("Settings")
+
+# Initialize session state for logs
+if "processing_logs" not in st.session_state:
+    st.session_state.processing_logs = []
+
+
+def add_log(message: str, level: str = "info"):
+    """Add a log entry with timestamp."""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    icon = {"info": "ℹ️", "success": "✅", "warning": "⚠️", "error": "❌"}.get(level, "ℹ️")
+    st.session_state.processing_logs.append(
+        {"timestamp": timestamp, "level": level, "icon": icon, "message": message}
+    )
+
 
 # Initialize cache
 cache = DocumentCache()
@@ -45,33 +61,92 @@ with st.form("settings_form", border=True):
                     "Use re-index to update."
                 )
             else:
+                # Clear previous logs
+                st.session_state.processing_logs = []
+
                 # Check cache status
                 has_parsed = cache.has_parsed(url)
                 has_original = cache.has_original(url)
+                has_chunks = cache.has_chunks(url)
 
-                # Determine processing message
-                if has_parsed:
-                    status_msg = "📄 Loading parsed document from cache..."
+                add_log(f"Processing URL: {url}", "info")
+                add_log(
+                    f"Cache status - Parsed: {has_parsed}, "
+                    f"Original: {has_original}, Chunks: {has_chunks}",
+                    "info",
+                )
+
+                # Determine processing steps
+                if has_chunks and has_parsed:
+                    total_steps = 2  # Load parsed, load chunks
+                    status_msg = "📄 Loading from cache..."
+                elif has_parsed:
+                    total_steps = 3  # Load parsed, generate chunks, index
+                    status_msg = "📄 Loading parsed document and generating chunks..."
                 elif has_original:
-                    status_msg = "🔄 Processing cached document with LlamaParse..."
+                    total_steps = 4  # Parse, save parsed, generate chunks, index
+                    status_msg = "🔄 Processing cached document..."
                 else:
+                    total_steps = 5  # Download, parse, save, chunk, index
                     status_msg = "⬇️ Downloading and processing document..."
 
-                with st.spinner(status_msg):
+                # Create progress container
+                progress_container = st.container()
+                with progress_container:
+                    progress_bar = st.progress(0, text=status_msg)
+                    status_text = st.empty()
+
+                start_time = time.time()
+
+                def update_progress(step: int, message: str):
+                    progress = step / total_steps
+                    progress_bar.progress(progress, text=message)
+                    status_text.text(
+                        f"Step {step}/{total_steps}: {message}"
+                    )
+                    add_log(message, "info")
+
+                try:
+                    # Initialize document
                     document = Document(
                         url,
                         client=OpenAI(api_key=st.secrets["openai_api_key"]),
-                        llama_parse=LlamaParse(
+                            llama_parse=LlamaParse(
                             api_key=st.secrets["llama_cloud_api_key"], language="pt"
                         ),
                         cache=cache,
                     )
 
-                    # Process document and get chunks
+                    # Process based on cache status
+                    if not has_original:
+                        update_progress(1, "Downloading document...")
+
+                    # Get markdown content (triggers download/parse if needed)
                     markdown_content = document.markdown()
+
+                    if not has_parsed and has_original:
+                        update_progress(
+                            2, "Parsing document with LlamaParse..."
+                        )
+                    elif has_parsed:
+                        update_progress(
+                            2, "Loaded parsed document from cache"
+                        )
+
+                    # Get chunks
+                    update_progress(3, "Processing chunks...")
                     chunks = document.chunks()
 
+                    if chunks:
+                        add_log(f"Generated {len(chunks)} chunks", "success")
+                    else:
+                        add_log(
+                            "No chunks generated, using full document", "warning"
+                        )
+
                     # Add chunks to ChromaDB
+                    update_progress(4, "Indexing in ChromaDB...")
+
                     if chunks:
                         # Prepare data for ChromaDB
                         documents = []
@@ -100,6 +175,9 @@ with st.form("settings_form", border=True):
                             metadatas=metadatas,
                             ids=ids,
                         )
+                        add_log(
+                            f"Indexed {len(chunks)} chunks in ChromaDB", "success"
+                        )
                     else:
                         # Fallback to full document if no chunks
                         collection.add(
@@ -107,24 +185,46 @@ with st.form("settings_form", border=True):
                             metadatas=[{"url": url}],
                             ids=[url],
                         )
+                        add_log("Indexed full document in ChromaDB", "success")
+
+                    # Complete progress
+                    update_progress(total_steps, "Processing complete!")
+
+                    # Calculate processing time
+                    processing_time = time.time() - start_time
+                    add_log(
+                        f"Total processing time: {processing_time:.2f} seconds",
+                        "success",
+                    )
 
                     # Show appropriate success message
                     num_chunks = len(chunks) if chunks else 1
                     chunk_info = f" ({num_chunks} chunks)" if chunks else ""
 
-                    if has_parsed:
+                    if has_parsed and has_chunks:
                         st.success(
-                            f"✅ Document loaded from parsed cache{chunk_info} "
-                            "(no API calls)!"
+                            f"✅ Document loaded from cache{chunk_info} "
+                            f"in {processing_time:.1f}s (no API calls)!"
+                        )
+                    elif has_parsed:
+                        st.success(
+                            f"✅ Document processed from parsed cache{chunk_info} "
+                            f"in {processing_time:.1f}s!"
                         )
                     elif has_original:
                         st.success(
-                            f"✅ Document processed from cached original{chunk_info}!"
+                            f"✅ Document processed from cached original"
+                            f"{chunk_info} in {processing_time:.1f}s!"
                         )
                     else:
                         st.success(
-                            f"✅ Document downloaded, processed and cached{chunk_info}!"
+                            f"✅ Document downloaded, processed and cached"
+                            f"{chunk_info} in {processing_time:.1f}s!"
                         )
+
+                except Exception as e:
+                    add_log(f"Error: {str(e)}", "error")
+                    st.error(f"❌ Error processing document: {str(e)}")
 
 with st.container(border=True):
     st.markdown("### Indexed Documents")
@@ -176,9 +276,17 @@ with st.container(border=True):
 
             with col2:
                 if st.button("🔄 Re-index", key=f"reindex_{url}"):
+                    # Clear previous logs
+                    st.session_state.processing_logs = []
+                    add_log(f"Re-indexing URL: {url}", "info")
+
                     # Delete existing entries from ChromaDB
                     existing_ids = [item["id"] for item in items]
                     collection.delete(ids=existing_ids)
+                    add_log(
+                        f"Removed {len(existing_ids)} existing entries from ChromaDB",
+                        "info",
+                    )
 
                     # Check if document is in cache
                     if cache.has_parsed(url):
@@ -322,3 +430,28 @@ with st.container(border=True):
                 cache.cache_dir.mkdir(parents=True, exist_ok=True)
             st.success("✅ All cache cleared!")
             st.rerun()
+
+# Processing logs section
+if st.session_state.processing_logs:
+    with st.container(border=True):
+        st.markdown("### Processing Logs")
+
+        # Add clear logs button
+        if st.button("🗑️ Clear Logs", key="clear_logs"):
+            st.session_state.processing_logs = []
+            st.rerun()
+
+        # Display logs in reverse order (newest first)
+        for log in reversed(st.session_state.processing_logs):
+            col1, col2 = st.columns([1, 5])
+            with col1:
+                st.text(f"{log['timestamp']}")
+            with col2:
+                if log["level"] == "error":
+                    st.error(f"{log['icon']} {log['message']}", icon=None)
+                elif log["level"] == "warning":
+                    st.warning(f"{log['icon']} {log['message']}", icon=None)
+                elif log["level"] == "success":
+                    st.success(f"{log['icon']} {log['message']}", icon=None)
+                else:
+                    st.info(f"{log['icon']} {log['message']}", icon=None)

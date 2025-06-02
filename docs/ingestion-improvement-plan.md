@@ -53,11 +53,11 @@ graph TD
 
 **Valor**: Permite salvar e recuperar documentos originais do disco
 
-### Fase 2: Integração com Settings (✅ Entregável: Download com cache)
-- [ ] Modificar `settings.py` para usar `DocumentCache`
-- [ ] Salvar documento original após download
-- [ ] Verificar cache antes de fazer novo download
-- [ ] Adicionar indicador visual de status (cached/new)
+### Fase 2: Integração com Settings (✅ Entregável: Download com cache) ✅ CONCLUÍDA
+- [x] Modificar `settings.py` para usar `DocumentCache`
+- [x] Salvar documento original após download
+- [x] Verificar cache antes de fazer novo download
+- [x] Adicionar indicador visual de status (cached/new)
 
 **Valor**: Evita re-download de documentos já baixados
 

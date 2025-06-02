@@ -29,6 +29,11 @@ class DocumentCache:
         doc_path = self.get_document_path(url)
         return (doc_path / "original.bin").exists()
 
+    def has_parsed(self, url: str) -> bool:
+        """Check if the parsed document is cached."""
+        doc_path = self.get_document_path(url)
+        return (doc_path / "parsed.md").exists()
+
     def save_original(self, url: str, content: bytes) -> None:
         """Save the original document content."""
         doc_path = self.get_document_path(url)
@@ -47,6 +52,26 @@ class DocumentCache:
 
         if original_file.exists():
             return original_file.read_bytes()
+        return None
+
+    def save_parsed(self, url: str, markdown: str) -> None:
+        """Save the parsed markdown content."""
+        doc_path = self.get_document_path(url)
+        doc_path.mkdir(parents=True, exist_ok=True)
+
+        # Save parsed content
+        (doc_path / "parsed.md").write_text(markdown, encoding="utf-8")
+
+        # Update metadata
+        self._update_metadata(url, {"parsed_saved": datetime.now().isoformat()})
+
+    def load_parsed(self, url: str) -> str | None:
+        """Load the parsed markdown content."""
+        doc_path = self.get_document_path(url)
+        parsed_file = doc_path / "parsed.md"
+
+        if parsed_file.exists():
+            return parsed_file.read_text(encoding="utf-8")
         return None
 
     def save_metadata(self, url: str, metadata: dict) -> None:

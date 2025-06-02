@@ -61,11 +61,11 @@ graph TD
 
 **Valor**: Evita re-download de documentos já baixados
 
-### Fase 3: Cache de Documentos Processados (✅ Entregável: Cache completo)
-- [ ] Estender `DocumentCache` com `save_parsed()`, `load_parsed()`
-- [ ] Modificar `Document` class para usar cache
-- [ ] Salvar resultado do LlamaParse
-- [ ] Implementar metadata.json com timestamps
+### Fase 3: Cache de Documentos Processados (✅ Entregável: Cache completo) ✅ CONCLUÍDA
+- [x] Estender `DocumentCache` com `save_parsed()`, `load_parsed()`
+- [x] Modificar `Document` class para usar cache
+- [x] Salvar resultado do LlamaParse
+- [x] Implementar metadata.json com timestamps
 
 **Valor**: Evita reprocessamento pelo LlamaParse (economia de API calls)
 

@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from urllib.parse import urlparse
 
 import requests
@@ -43,7 +44,18 @@ class Document:
         return self._document_output.tags
 
     def _read_document(self):
-        # Check if we have the original document in cache
+        # First, check if we have the parsed document in cache
+        parsed_content = self._cache.load_parsed(self._url)
+
+        if parsed_content is not None:
+            # Use cached parsed content
+            self._document_output = self._create_document(parsed_content)
+            self._cache._update_metadata(
+                self._url, {"parsed_loaded_from_cache": datetime.now().isoformat()}
+            )
+            return
+
+        # If not, check if we have the original document in cache
         content_bytes = self._cache.load_original(self._url)
 
         if content_bytes is None:
@@ -69,11 +81,16 @@ class Document:
             # Get filename from URL when loading from cache
             file_name = self._get_file_name_from_url(self._url)
 
-        # Parse the document
+        # Parse the document with LlamaParse
         result = self._llama_parse.parse(
             content_bytes, extra_info={"file_name": file_name}
         )
         content = "\n".join(page.md for page in result.pages)
+
+        # Save parsed content to cache
+        self._cache.save_parsed(self._url, content)
+
+        # Create document output
         self._document_output = self._create_document(content)
 
     @classmethod

@@ -1,5 +1,4 @@
 import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -55,16 +54,16 @@ class TestDocumentWithCache:
 
         # First access should download
         assert not temp_cache.has_original(url)
-        content = doc.markdown()
+        doc.markdown()
 
         # Verify download happened
         mock_get.assert_called_once_with(url)
-        
+
         # Verify content was cached
         assert temp_cache.has_original(url)
         cached_content = temp_cache.load_original(url)
         assert cached_content == b"Test PDF content"
-        
+
         # Verify metadata was saved
         metadata = temp_cache.load_metadata(url)
         assert metadata["content_type"] == "application/pdf"
@@ -72,12 +71,10 @@ class TestDocumentWithCache:
         assert metadata["status_code"] == 200
 
     @patch("requests.get")
-    def test_load_from_cache(
-        self, mock_get, mock_openai, mock_llama_parse, temp_cache
-    ):
+    def test_load_from_cache(self, mock_get, mock_openai, mock_llama_parse, temp_cache):
         """Test loading document from cache without download."""
         url = "https://example.com/cached.pdf"
-        
+
         # Pre-populate cache
         temp_cache.save_original(url, b"Cached content")
         temp_cache.save_metadata(url, {"content_type": "application/pdf"})
@@ -86,11 +83,11 @@ class TestDocumentWithCache:
         doc = Document(url, mock_openai, mock_llama_parse, cache=temp_cache)
 
         # Access should use cache
-        content = doc.markdown()
+        doc.markdown()
 
         # Verify no download happened
         mock_get.assert_not_called()
-        
+
         # Verify LlamaParse was called with cached content
         mock_llama_parse.parse.assert_called_once()
         call_args = mock_llama_parse.parse.call_args
@@ -112,7 +109,7 @@ class TestDocumentWithCache:
             # Create document without cache (should use default)
             url = "https://example.com/test.txt"
             doc = Document(url, mock_openai, mock_llama_parse)
-            
+
             # Should still work
             content = doc.markdown()
             assert content == "# Test Document\n\nThis is test content."
@@ -130,3 +127,56 @@ class TestDocumentWithCache:
         for url, expected_filename in test_cases:
             doc = Document(url, mock_openai, mock_llama_parse, cache=temp_cache)
             assert doc._get_file_name_from_url(url) == expected_filename
+
+    @patch("requests.get")
+    def test_parsed_cache_hit(
+        self, mock_get, mock_openai, mock_llama_parse, temp_cache
+    ):
+        """Test that parsed cache prevents both download and LlamaParse calls."""
+        url = "https://example.com/cached.pdf"
+        parsed_content = "# Cached Document\n\nThis is cached parsed content."
+
+        # Pre-populate cache with parsed content
+        temp_cache.save_parsed(url, parsed_content)
+
+        # Create document with cache
+        doc = Document(url, mock_openai, mock_llama_parse, cache=temp_cache)
+
+        # Access should use parsed cache
+        content = doc.markdown()
+
+        # Verify no download happened
+        mock_get.assert_not_called()
+
+        # Verify no LlamaParse call happened
+        mock_llama_parse.parse.assert_not_called()
+
+        # Verify correct content returned
+        assert content == parsed_content
+
+    @patch("requests.get")
+    def test_cache_progression_original_to_parsed(
+        self, mock_get, mock_openai, mock_llama_parse, temp_cache
+    ):
+        """Test progression from original cache to parsed cache."""
+        url = "https://example.com/test.pdf"
+
+        # Pre-populate cache with original only
+        temp_cache.save_original(url, b"Original PDF content")
+
+        # Create document with cache
+        doc = Document(url, mock_openai, mock_llama_parse, cache=temp_cache)
+
+        # First access should parse but not download
+        doc.markdown()
+
+        # Verify no download happened
+        mock_get.assert_not_called()
+
+        # Verify LlamaParse was called
+        mock_llama_parse.parse.assert_called_once()
+
+        # Verify parsed content was saved to cache
+        assert temp_cache.has_parsed(url)
+        cached_parsed = temp_cache.load_parsed(url)
+        assert cached_parsed == "# Test Document\n\nThis is test content."

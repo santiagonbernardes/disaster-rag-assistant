@@ -172,3 +172,49 @@ class TestDocumentCache:
         # Verify metadata content
         metadata_content = json.loads((doc_path / "metadata.json").read_text())
         assert metadata_content["url"] == url
+
+    def test_save_and_load_parsed(self, document_cache):
+        """Test saving and loading parsed markdown content."""
+        url = "https://example.com/test.pdf"
+        markdown_content = "# Test Document\n\nThis is parsed content."
+
+        # Initially, parsed content should not exist
+        assert not document_cache.has_parsed(url)
+        assert document_cache.load_parsed(url) is None
+
+        # Save parsed content
+        document_cache.save_parsed(url, markdown_content)
+
+        # Now it should exist
+        assert document_cache.has_parsed(url)
+
+        # Load and verify content
+        loaded_content = document_cache.load_parsed(url)
+        assert loaded_content == markdown_content
+
+        # Check metadata was updated
+        metadata = document_cache.load_metadata(url)
+        assert "parsed_saved" in metadata
+
+    def test_cache_progression(self, document_cache):
+        """Test the progression of cache states."""
+        url = "https://example.com/doc.pdf"
+
+        # Initially nothing cached
+        assert not document_cache.exists(url)
+        assert not document_cache.has_original(url)
+        assert not document_cache.has_parsed(url)
+
+        # Save original
+        document_cache.save_original(url, b"Original content")
+        assert document_cache.exists(url)
+        assert document_cache.has_original(url)
+        assert not document_cache.has_parsed(url)
+
+        # Save parsed
+        document_cache.save_parsed(url, "Parsed content")
+        assert document_cache.has_parsed(url)
+
+        # Both should exist
+        assert document_cache.load_original(url) == b"Original content"
+        assert document_cache.load_parsed(url) == "Parsed content"

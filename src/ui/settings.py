@@ -35,12 +35,19 @@ with st.form("settings_form", border=True):
 
     with button_col:
         if st.form_submit_button("Index", use_container_width=True):
-            # Check if document is already in cache
-            is_cached = cache.has_original(url)
+            # Check cache status
+            has_parsed = cache.has_parsed(url)
+            has_original = cache.has_original(url)
 
-            with st.spinner(
-                "Loading from cache..." if is_cached else "Downloading document..."
-            ):
+            # Determine processing message
+            if has_parsed:
+                status_msg = "📄 Loading parsed document from cache..."
+            elif has_original:
+                status_msg = "🔄 Processing cached document with LlamaParse..."
+            else:
+                status_msg = "⬇️ Downloading and processing document..."
+
+            with st.spinner(status_msg):
                 document = Document(
                     url,
                     client=OpenAI(api_key=st.secrets["openai_api_key"]),
@@ -60,12 +67,13 @@ with st.form("settings_form", border=True):
                     ids=[url],
                 )
 
-                if is_cached:
-                    st.success(
-                        "✅ Document loaded from cache and indexed successfully!"
-                    )
+                # Show appropriate success message
+                if has_parsed:
+                    st.success("✅ Document loaded from parsed cache (no API calls)!")
+                elif has_original:
+                    st.success("✅ Document processed from cached original!")
                 else:
-                    st.success("✅ Document downloaded and indexed successfully!")
+                    st.success("✅ Document downloaded, processed and cached!")
 
 with st.container(border=True):
     st.markdown("### Indexed Documents")

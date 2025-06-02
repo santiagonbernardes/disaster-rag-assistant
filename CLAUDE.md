@@ -15,10 +15,10 @@ The project is implementing an improved document ingestion system with caching a
 - **Phase 2** ✅: UI integration with download caching
 - **Phase 3** ✅: Parsed document caching (avoid LlamaParse API calls)
 - **Phase 4** ✅: Document chunking system (`DocumentChunker`)
+- **Phase 5** ✅: Integration of chunking with cache and ChromaDB
+- **Phase 6** ✅: ChromaDB duplicate checking and cache management
 
 ### Pending Phases:
-- **Phase 5**: Integration of chunking with cache
-- **Phase 6**: ChromaDB duplicate checking
 - **Phase 7**: UI improvements and observability
 
 See `docs/ingestion-improvement-plan.md` for detailed implementation plan.

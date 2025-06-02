@@ -8,12 +8,16 @@ from llama_cloud_services import LlamaParse
 from pydantic import BaseModel, Field
 
 from src.repositories.document_cache import DocumentCache
+from src.services.document_chunker import Chunk, DocumentChunker
 
 
 class DocumentOutput(BaseModel):
     markdown: str = Field(description="Markdown representation of the document content")
     tags: list[str] = Field(
         default_factory=list, description="List of tags associated with the document"
+    )
+    chunks: list[Chunk] = Field(
+        default_factory=list, description="Document chunks for retrieval"
     )
 
 
@@ -24,12 +28,14 @@ class Document:
         client: OpenAI,
         llama_parse: LlamaParse,
         cache: DocumentCache | None = None,
+        chunker: DocumentChunker | None = None,
     ):
         self._url: str = url
         self._llm_client: OpenAI = client
         self._document_output: DocumentOutput | None = None
         self._llama_parse: LlamaParse = llama_parse
         self._cache = cache or DocumentCache()
+        self._chunker = chunker or DocumentChunker()
 
     def markdown(self) -> str:
         if not self._document_output:
@@ -43,13 +49,33 @@ class Document:
 
         return self._document_output.tags
 
+    def chunks(self) -> list[Chunk]:
+        if not self._document_output:
+            self._read_document()
+
+        return self._document_output.chunks
+
     def _read_document(self):
-        # First, check if we have the parsed document in cache
+        # First, check if we have chunks in cache
+        chunks = self._cache.load_chunks(self._url)
+
+        if chunks is not None:
+            # We have everything cached
+            parsed_content = self._cache.load_parsed(self._url)
+            if parsed_content is not None:
+                self._document_output = self._create_document(parsed_content, chunks)
+                self._cache._update_metadata(
+                    self._url, {"chunks_loaded_from_cache": datetime.now().isoformat()}
+                )
+                return
+
+        # If not, check if we have the parsed document in cache
         parsed_content = self._cache.load_parsed(self._url)
 
         if parsed_content is not None:
-            # Use cached parsed content
-            self._document_output = self._create_document(parsed_content)
+            # Use cached parsed content and generate chunks
+            chunks = self._generate_chunks(parsed_content)
+            self._document_output = self._create_document(parsed_content, chunks)
             self._cache._update_metadata(
                 self._url, {"parsed_loaded_from_cache": datetime.now().isoformat()}
             )
@@ -90,12 +116,34 @@ class Document:
         # Save parsed content to cache
         self._cache.save_parsed(self._url, content)
 
+        # Generate chunks
+        chunks = self._generate_chunks(content)
+
         # Create document output
-        self._document_output = self._create_document(content)
+        self._document_output = self._create_document(content, chunks)
+
+    def _generate_chunks(self, content: str) -> list[Chunk]:
+        """Generate chunks from parsed content and save to cache."""
+        # Prepare metadata for chunks
+        metadata = {
+            "url": self._url,
+            "url_hash": self._cache.get_document_hash(self._url),
+            "chunked_at": datetime.now().isoformat(),
+        }
+
+        # Generate chunks
+        chunks = self._chunker.chunk_document(content, metadata)
+
+        # Save chunks to cache
+        self._cache.save_chunks(self._url, chunks)
+
+        return chunks
 
     @classmethod
-    def _create_document(cls, content: str) -> DocumentOutput:
-        return DocumentOutput(markdown=content, tags=[])
+    def _create_document(
+        cls, content: str, chunks: list[Chunk] | None = None
+    ) -> DocumentOutput:
+        return DocumentOutput(markdown=content, tags=[], chunks=chunks or [])
 
     @classmethod
     def _get_file_name(cls, response):

@@ -57,41 +57,118 @@ with st.form("settings_form", border=True):
                     cache=cache,
                 )
 
-                # Process document
+                # Process document and get chunks
                 markdown_content = document.markdown()
+                chunks = document.chunks()
 
-                # Add to ChromaDB
-                collection.add(
-                    documents=[markdown_content],
-                    metadatas=[{"url": url}],
-                    ids=[url],
-                )
+                # Add chunks to ChromaDB
+                if chunks:
+                    # Prepare data for ChromaDB
+                    documents = []
+                    metadatas = []
+                    ids = []
+
+                    for chunk in chunks:
+                        documents.append(chunk.content)
+                        # Include original URL and chunk-specific metadata
+                        chunk_metadata = {
+                            "url": url,
+                            "chunk_index": chunk.index,
+                            "total_chunks": chunk.metadata.get(
+                                "total_chunks", len(chunks)
+                            ),
+                            "start_char": chunk.start_char,
+                            "end_char": chunk.end_char,
+                        }
+                        metadatas.append(chunk_metadata)
+                        # Create unique ID for each chunk
+                        ids.append(f"{url}#chunk_{chunk.index}")
+
+                    # Add all chunks to ChromaDB
+                    collection.add(
+                        documents=documents,
+                        metadatas=metadatas,
+                        ids=ids,
+                    )
+                else:
+                    # Fallback to full document if no chunks
+                    collection.add(
+                        documents=[markdown_content],
+                        metadatas=[{"url": url}],
+                        ids=[url],
+                    )
 
                 # Show appropriate success message
+                num_chunks = len(chunks) if chunks else 1
+                chunk_info = f" ({num_chunks} chunks)" if chunks else ""
+
                 if has_parsed:
-                    st.success("✅ Document loaded from parsed cache (no API calls)!")
+                    st.success(
+                        f"✅ Document loaded from parsed cache{chunk_info} "
+                        "(no API calls)!"
+                    )
                 elif has_original:
-                    st.success("✅ Document processed from cached original!")
+                    st.success(
+                        f"✅ Document processed from cached original{chunk_info}!"
+                    )
                 else:
-                    st.success("✅ Document downloaded, processed and cached!")
+                    st.success(
+                        f"✅ Document downloaded, processed and cached{chunk_info}!"
+                    )
 
 with st.container(border=True):
     st.markdown("### Indexed Documents")
-    st.markdown(f"Total documents indexed: {collection.count()}")
+    st.markdown(f"Total items indexed: {collection.count()}")
 
     collection_data = collection.get()
 
     documents = collection_data["documents"]
     ids = collection_data["ids"]
+    metadatas = collection_data.get("metadatas", [])
     enconding = tiktoken.encoding_for_model("gpt-4")
-    for document, doc_id in zip(documents, ids, strict=False):
-        num_token = len(enconding.encode(document))
+
+    # Group chunks by URL
+    url_groups = {}
+    for document, doc_id, metadata in zip(
+        documents, ids, metadatas or [{} for _ in ids], strict=False
+    ):
+        url = metadata.get("url", doc_id.split("#")[0] if "#" in doc_id else doc_id)
+        if url not in url_groups:
+            url_groups[url] = []
+        url_groups[url].append(
+            {
+                "document": document,
+                "id": doc_id,
+                "metadata": metadata,
+                "tokens": len(enconding.encode(document)),
+            }
+        )
+
+    # Display by URL
+    for url, items in url_groups.items():
+        total_tokens = sum(item["tokens"] for item in items)
+        num_chunks = len([item for item in items if "#chunk_" in item["id"]])
+
         # Check if document is in cache
-        cache_status = "📁 Cached" if cache.exists(doc_id) else "☁️ Not cached"
-        with st.expander(
-            f"Tokens: {num_token}, Url: {doc_id} | {cache_status}", expanded=False
-        ):
-            st.write(document)
+        cache_status = "📁 Cached" if cache.exists(url) else "☁️ Not cached"
+
+        if num_chunks > 0:
+            display_text = (
+                f"Tokens: {total_tokens}, Chunks: {num_chunks}, "
+                f"URL: {url} | {cache_status}"
+            )
+        else:
+            display_text = f"Tokens: {total_tokens}, URL: {url} | {cache_status}"
+
+        with st.expander(display_text, expanded=False):
+            if num_chunks > 0:
+                for item in items:
+                    chunk_idx = item["metadata"].get("chunk_index", "?")
+                    st.markdown(f"**Chunk {chunk_idx}** ({item['tokens']} tokens)")
+                    st.write(item["document"])
+                    st.divider()
+            else:
+                st.write(items[0]["document"])
 
 # Cache statistics section
 with st.container(border=True):

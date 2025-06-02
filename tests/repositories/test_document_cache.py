@@ -218,3 +218,101 @@ class TestDocumentCache:
         # Both should exist
         assert document_cache.load_original(url) == b"Original content"
         assert document_cache.load_parsed(url) == "Parsed content"
+
+    def test_save_and_load_chunks(self, document_cache):
+        """Test saving and loading document chunks."""
+        from src.services.document_chunker import Chunk
+
+        url = "https://example.com/test.pdf"
+        chunks = [
+            Chunk(
+                content="First chunk content",
+                index=0,
+                start_char=0,
+                end_char=19,
+                metadata={"chunk_index": 0, "total_chunks": 3},
+            ),
+            Chunk(
+                content="Second chunk content",
+                index=1,
+                start_char=20,
+                end_char=40,
+                metadata={"chunk_index": 1, "total_chunks": 3},
+            ),
+            Chunk(
+                content="Third chunk content",
+                index=2,
+                start_char=41,
+                end_char=60,
+                metadata={"chunk_index": 2, "total_chunks": 3},
+            ),
+        ]
+
+        # Initially, chunks should not exist
+        assert not document_cache.has_chunks(url)
+        assert document_cache.load_chunks(url) is None
+
+        # Save chunks
+        document_cache.save_chunks(url, chunks)
+
+        # Now chunks should exist
+        assert document_cache.has_chunks(url)
+
+        # Load chunks and verify
+        loaded_chunks = document_cache.load_chunks(url)
+        assert loaded_chunks is not None
+        assert len(loaded_chunks) == 3
+
+        # Verify chunk content
+        for i, chunk in enumerate(loaded_chunks):
+            assert chunk.content == chunks[i].content
+            assert chunk.index == chunks[i].index
+            assert chunk.start_char == chunks[i].start_char
+            assert chunk.end_char == chunks[i].end_char
+            assert chunk.metadata == chunks[i].metadata
+
+        # Verify metadata was updated
+        metadata = document_cache.load_metadata(url)
+        assert metadata["chunk_count"] == 3
+        assert "chunks_saved" in metadata
+
+    def test_cache_progression_with_chunks(self, document_cache):
+        """Test the full progression of cache states including chunks."""
+        from src.services.document_chunker import Chunk
+
+        url = "https://example.com/doc.pdf"
+
+        # Initially nothing cached
+        assert not document_cache.exists(url)
+        assert not document_cache.has_original(url)
+        assert not document_cache.has_parsed(url)
+        assert not document_cache.has_chunks(url)
+
+        # Save original
+        document_cache.save_original(url, b"Original content")
+        assert document_cache.has_original(url)
+        assert not document_cache.has_parsed(url)
+        assert not document_cache.has_chunks(url)
+
+        # Save parsed
+        document_cache.save_parsed(url, "Parsed content")
+        assert document_cache.has_parsed(url)
+        assert not document_cache.has_chunks(url)
+
+        # Save chunks
+        chunks = [
+            Chunk(
+                content="Test chunk",
+                index=0,
+                start_char=0,
+                end_char=10,
+                metadata={"test": True},
+            )
+        ]
+        document_cache.save_chunks(url, chunks)
+        assert document_cache.has_chunks(url)
+
+        # All should exist
+        assert document_cache.load_original(url) == b"Original content"
+        assert document_cache.load_parsed(url) == "Parsed content"
+        assert len(document_cache.load_chunks(url)) == 1

@@ -74,6 +74,62 @@ class DocumentCache:
             return parsed_file.read_text(encoding="utf-8")
         return None
 
+    def has_chunks(self, url: str) -> bool:
+        """Check if chunks are cached for this document."""
+        doc_path = self.get_document_path(url)
+        return (doc_path / "chunks.json").exists()
+
+    def save_chunks(self, url: str, chunks: list) -> None:
+        """Save document chunks."""
+        doc_path = self.get_document_path(url)
+        doc_path.mkdir(parents=True, exist_ok=True)
+
+        # Convert chunks to serializable format
+        chunks_data = []
+        for chunk in chunks:
+            chunk_dict = {
+                "content": chunk.content,
+                "index": chunk.index,
+                "start_char": chunk.start_char,
+                "end_char": chunk.end_char,
+                "metadata": chunk.metadata,
+            }
+            chunks_data.append(chunk_dict)
+
+        # Save chunks
+        (doc_path / "chunks.json").write_text(
+            json.dumps(chunks_data, indent=2), encoding="utf-8"
+        )
+
+        # Update metadata
+        self._update_metadata(
+            url,
+            {"chunks_saved": datetime.now().isoformat(), "chunk_count": len(chunks)},
+        )
+
+    def load_chunks(self, url: str) -> list | None:
+        """Load document chunks."""
+        doc_path = self.get_document_path(url)
+        chunks_file = doc_path / "chunks.json"
+
+        if chunks_file.exists():
+            chunks_data = json.loads(chunks_file.read_text(encoding="utf-8"))
+            # Import Chunk class for reconstruction
+            from src.services.document_chunker import Chunk
+
+            chunks = []
+            for chunk_dict in chunks_data:
+                chunk = Chunk(
+                    content=chunk_dict["content"],
+                    index=chunk_dict["index"],
+                    start_char=chunk_dict["start_char"],
+                    end_char=chunk_dict["end_char"],
+                    metadata=chunk_dict["metadata"],
+                )
+                chunks.append(chunk)
+            return chunks
+        return None
+
     def save_metadata(self, url: str, metadata: dict) -> None:
         """Save metadata for a document."""
         doc_path = self.get_document_path(url)

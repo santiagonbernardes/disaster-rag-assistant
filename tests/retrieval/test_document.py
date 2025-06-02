@@ -180,3 +180,84 @@ class TestDocumentWithCache:
         assert temp_cache.has_parsed(url)
         cached_parsed = temp_cache.load_parsed(url)
         assert cached_parsed == "# Test Document\n\nThis is test content."
+
+    @patch("requests.get")
+    def test_document_chunking(
+        self, mock_get, mock_openai, mock_llama_parse, temp_cache
+    ):
+        """Test document chunking functionality."""
+        # Setup mock response
+        mock_response = Mock()
+        mock_response.content = b"Test PDF content"
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "application/pdf"}
+        mock_response.url = "https://example.com/test.pdf"
+        mock_response.raise_for_status = Mock()
+        mock_get.return_value = mock_response
+
+        # Create longer content for chunking
+        long_content = "This is a test document. " * 100  # Repeat to make it long
+        mock_page = MagicMock()
+        mock_page.md = long_content
+        mock_result = MagicMock()
+        mock_result.pages = [mock_page]
+        mock_llama_parse.parse.return_value = mock_result
+
+        url = "https://example.com/test.pdf"
+        doc = Document(url, mock_openai, mock_llama_parse, cache=temp_cache)
+
+        # Access chunks
+        chunks = doc.chunks()
+
+        # Verify chunks were generated
+        assert len(chunks) > 0
+        assert all(hasattr(chunk, "content") for chunk in chunks)
+        assert all(hasattr(chunk, "metadata") for chunk in chunks)
+
+        # Verify chunks were saved to cache
+        assert temp_cache.has_chunks(url)
+        cached_chunks = temp_cache.load_chunks(url)
+        assert len(cached_chunks) == len(chunks)
+
+        # Verify chunk metadata contains URL reference
+        for chunk in chunks:
+            assert chunk.metadata["url"] == url
+            assert "url_hash" in chunk.metadata
+            assert "chunked_at" in chunk.metadata
+
+    @patch("requests.get")
+    def test_chunks_cache_hit(
+        self, mock_get, mock_openai, mock_llama_parse, temp_cache
+    ):
+        """Test loading chunks from cache."""
+        from src.services.document_chunker import Chunk
+
+        url = "https://example.com/test.pdf"
+        parsed_content = "# Cached Document\n\nThis is cached content."
+
+        # Pre-populate cache with parsed content and chunks
+        temp_cache.save_parsed(url, parsed_content)
+        test_chunks = [
+            Chunk(
+                content="Test chunk",
+                index=0,
+                start_char=0,
+                end_char=10,
+                metadata={"url": url},
+            )
+        ]
+        temp_cache.save_chunks(url, test_chunks)
+
+        # Create document with cache
+        doc = Document(url, mock_openai, mock_llama_parse, cache=temp_cache)
+
+        # Access chunks
+        chunks = doc.chunks()
+
+        # Verify no download or parsing happened
+        mock_get.assert_not_called()
+        mock_llama_parse.parse.assert_not_called()
+
+        # Verify correct chunks returned
+        assert len(chunks) == 1
+        assert chunks[0].content == "Test chunk"

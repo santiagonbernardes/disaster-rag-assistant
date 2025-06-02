@@ -89,9 +89,14 @@ def get_retrieved_documents(user_prompt):
     if not relevant_docs:
         return ""
 
-    return "\n".join(
-        [f"Documento {i + 1}: {doc}" for i, doc in enumerate(relevant_docs)]
-    )
+    formatted_docs = []
+    for i, doc in enumerate(relevant_docs):
+        chunk_info = doc.get("chunk_info", "")
+        doc_header = f"Documento {i + 1} - URL: {doc['url']} {chunk_info}"
+        doc_content = doc["content"]
+        formatted_docs.append(f"{doc_header}\n{doc_content}")
+
+    return "\n\n".join(formatted_docs)
 
 
 @observe(name="retrieval")
@@ -108,16 +113,32 @@ def get_relevant_documents(documents):
 
     SIMILARITY_THRESHOLD = 1.3
     relevant_docs = []
+
+    # Handle metadatas if available
+    metadatas = documents.get("metadatas", [[{} for _ in documents["ids"][0]]])
+
     documents_data = zip(
         documents["ids"][0],
         documents["distances"][0],
         documents["documents"][0],
+        metadatas[0],
         strict=True,
     )
 
-    for doc_id, distance, document in documents_data:
+    for doc_id, distance, document, metadata in documents_data:
         if distance < SIMILARITY_THRESHOLD:
-            relevant_docs.append({"url": doc_id, "content": document})
+            # Extract URL from metadata or from doc_id
+            url = metadata.get("url", doc_id.split("#")[0] if "#" in doc_id else doc_id)
+
+            doc_info = {"url": url, "content": document}
+
+            # Add chunk info if this is a chunk
+            if "#chunk_" in doc_id:
+                chunk_idx = metadata.get("chunk_index", doc_id.split("_")[-1])
+                total_chunks = metadata.get("total_chunks", "?")
+                doc_info["chunk_info"] = f"(Trecho {chunk_idx + 1} de {total_chunks})"
+
+            relevant_docs.append(doc_info)
 
     return relevant_docs
 

@@ -1,0 +1,114 @@
+import hashlib
+import json
+from datetime import datetime
+from pathlib import Path
+
+
+class DocumentCache:
+    """Manages document caching on disk to avoid reprocessing."""
+
+    def __init__(self, cache_dir: Path | str = ".cache/documents"):
+        self.cache_dir = Path(cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+
+    def get_document_hash(self, url: str) -> str:
+        """Generate a unique hash for the URL."""
+        return hashlib.sha256(url.encode()).hexdigest()[:16]
+
+    def get_document_path(self, url: str) -> Path:
+        """Get the directory path for a specific document."""
+        doc_hash = self.get_document_hash(url)
+        return self.cache_dir / doc_hash
+
+    def exists(self, url: str) -> bool:
+        """Check if any cached data exists for this URL."""
+        return self.get_document_path(url).exists()
+
+    def has_original(self, url: str) -> bool:
+        """Check if the original document is cached."""
+        doc_path = self.get_document_path(url)
+        return (doc_path / "original.bin").exists()
+
+    def save_original(self, url: str, content: bytes) -> None:
+        """Save the original document content."""
+        doc_path = self.get_document_path(url)
+        doc_path.mkdir(parents=True, exist_ok=True)
+
+        # Save original content
+        (doc_path / "original.bin").write_bytes(content)
+
+        # Update metadata
+        self._update_metadata(url, {"original_saved": datetime.now().isoformat()})
+
+    def load_original(self, url: str) -> bytes | None:
+        """Load the original document content."""
+        doc_path = self.get_document_path(url)
+        original_file = doc_path / "original.bin"
+
+        if original_file.exists():
+            return original_file.read_bytes()
+        return None
+
+    def save_metadata(self, url: str, metadata: dict) -> None:
+        """Save metadata for a document."""
+        doc_path = self.get_document_path(url)
+        doc_path.mkdir(parents=True, exist_ok=True)
+
+        metadata_file = doc_path / "metadata.json"
+        metadata["url"] = url
+        metadata["hash"] = self.get_document_hash(url)
+        metadata["updated_at"] = datetime.now().isoformat()
+
+        metadata_file.write_text(json.dumps(metadata, indent=2))
+
+    def load_metadata(self, url: str) -> dict | None:
+        """Load metadata for a document."""
+        doc_path = self.get_document_path(url)
+        metadata_file = doc_path / "metadata.json"
+
+        if metadata_file.exists():
+            return json.loads(metadata_file.read_text())
+        return None
+
+    def _update_metadata(self, url: str, updates: dict) -> None:
+        """Update existing metadata or create new one."""
+        metadata = self.load_metadata(url) or {}
+        metadata.update(updates)
+        self.save_metadata(url, metadata)
+
+    def list_cached_documents(self) -> list[dict]:
+        """List all cached documents with their metadata."""
+        documents = []
+        for doc_dir in self.cache_dir.iterdir():
+            if doc_dir.is_dir():
+                metadata_file = doc_dir / "metadata.json"
+                if metadata_file.exists():
+                    metadata = json.loads(metadata_file.read_text())
+                    documents.append(metadata)
+        return documents
+
+    def clear_cache(self, url: str) -> None:
+        """Clear cache for a specific URL."""
+        doc_path = self.get_document_path(url)
+        if doc_path.exists():
+            import shutil
+
+            shutil.rmtree(doc_path)
+
+    def get_cache_size(self) -> dict:
+        """Get cache statistics."""
+        total_size = 0
+        doc_count = 0
+
+        for doc_dir in self.cache_dir.iterdir():
+            if doc_dir.is_dir():
+                doc_count += 1
+                for file in doc_dir.rglob("*"):
+                    if file.is_file():
+                        total_size += file.stat().st_size
+
+        return {
+            "total_size_bytes": total_size,
+            "total_size_mb": round(total_size / (1024 * 1024), 2),
+            "document_count": doc_count,
+        }

@@ -45,6 +45,57 @@ uvx ruff check src/
 uvx ruff format src/
 ```
 
+## Development Methodology
+
+### Planning and Implementation Process
+
+For new features or significant changes, follow this proven methodology:
+
+#### 1. Create a Comprehensive Plan
+- **Document Location**: Create plan files in `docs/` (e.g., `feature-improvement-plan.md`)
+- **Structure**: Include objective, requirements, phases, implementation details, and success metrics
+- **Break Down**: Divide into 5-7 manageable phases that can be implemented and tested independently
+- **Dependencies**: Clearly identify dependencies between phases
+
+#### 2. Phase-Based Implementation
+- **One Phase at a Time**: Complete each phase before moving to the next
+- **Incremental Progress**: Each phase should add tangible value and be testable
+- **Documentation**: Update progress in plan documents as phases complete
+- **Testing**: Run full test suite after each phase completion
+
+#### 3. Status Tracking and Artifacts
+- **Todo Management**: Use TodoWrite/TodoRead tools to track tasks within each phase
+- **Progress Updates**: Update CLAUDE.md and plan documents with completed phases
+- **Real-time Status**: Mark phases as ✅ when completed
+- **Artifact Updates**: Keep all project documentation synchronized
+
+#### 4. Feedback Loop Process
+- **Commit Early**: Commit each completed phase separately
+- **Test Integration**: Verify each phase works with existing functionality  
+- **Document Changes**: Update architecture notes and key implementation details
+- **Clean Up**: Remove temporary plan files when implementation is complete
+
+#### 5. Post-Implementation Cleanup
+- **Remove Plan Files**: Delete temporary implementation plan documents
+- **Update Documentation**: Ensure README.md, CLAUDE.md reflect new capabilities
+- **Preserve Examples**: Keep useful example code for future reference
+- **Final Commit**: Clean commit with updated documentation
+
+### Example Phase Structure
+```markdown
+### Phase 1: Infrastructure Setup (✅ Deliverable: Core functionality)
+- [ ] Create base classes and interfaces
+- [ ] Add configuration options  
+- [ ] Implement basic functionality
+- [ ] Add unit tests
+
+### Phase 2: Integration (✅ Deliverable: Working integration)
+- [ ] Connect with existing systems
+- [ ] Update UI components
+- [ ] Add error handling
+- [ ] Integration tests
+```
+
 ## Pre-Commit Checklist
 
 Before committing changes, always:
@@ -55,7 +106,12 @@ Before committing changes, always:
    uvx ruff format src/
    ```
 
-2. **Review and update CLAUDE.md**: Check if any architectural changes, new dependencies, or important implementation details need to be documented in this file.
+2. **Execute tests**:
+   ```bash
+   uv run pytest
+   ```
+
+3. **Review and update CLAUDE.md**: Check if any architectural changes, new dependencies, or important implementation details need to be documented in this file.
 
 ## Key Files and Structure
 
@@ -117,3 +173,44 @@ Copy `.streamlit/secrets.toml.SAMPLE` to `.streamlit/secrets.toml` and fill in y
 - OpenAI API key for LLM generation
 - Langfuse keys for observability and prompt management
 - LlamaCloud API key for document parsing
+
+## Development Tools and Best Practices
+
+### Task Management with Claude Code
+When working on complex features, use Claude Code's built-in tools:
+
+```python
+# Example: Using TodoWrite for phase tracking
+TodoWrite([
+    {"id": "1", "content": "Create base infrastructure", "status": "pending", "priority": "high"},
+    {"id": "2", "content": "Add UI components", "status": "pending", "priority": "high"},
+    {"id": "3", "content": "Implement error handling", "status": "pending", "priority": "medium"}
+])
+
+# Update status as work progresses
+TodoWrite([
+    {"id": "1", "content": "Create base infrastructure", "status": "completed", "priority": "high"},
+    {"id": "2", "content": "Add UI components", "status": "in_progress", "priority": "high"},
+    {"id": "3", "content": "Implement error handling", "status": "pending", "priority": "medium"}
+])
+```
+
+### Documentation Standards
+- **Plan Files**: Create in `docs/` with clear structure (objective, requirements, phases, success metrics)
+- **Progress Tracking**: Update plan files with ✅ markers as phases complete
+- **Status Documentation**: Keep CLAUDE.md current with architectural changes
+- **Examples**: Preserve useful code examples in `examples/` directory
+
+### Testing Strategy
+- **Phase Testing**: Run tests after each phase completion
+- **Integration Testing**: Verify new features work with existing functionality
+- **Regression Testing**: Ensure no existing functionality is broken
+- **Coverage**: Maintain comprehensive test coverage for new features
+
+### Quality Assurance
+- **Linting**: Use `uvx ruff check src/` before commits
+- **Formatting**: Use `uvx ruff format src/` for consistent code style
+- **Type Checking**: Consider adding type hints for complex functions
+- **Documentation**: Update docstrings and comments for new functionality
+
+This methodology ensures sustainable development with clear progress tracking, thorough testing, and maintainable code quality.

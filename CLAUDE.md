@@ -6,20 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Disaster RAG Assistant is an intelligent virtual assistant using RAG (Retrieval-Augmented Generation) architecture to provide personalized, contextual guidance for natural disaster response. It serves victims, residents, and families with real-time safety information, evacuation procedures, and emergency resources in Portuguese.
 
-## Current Project Status (Branch: chunking)
+## Current Project Status
 
-The project is implementing an improved document ingestion system with caching and chunking capabilities. Progress so far:
+The project has completed implementation of an improved document ingestion system with caching and chunking capabilities. Key features include:
 
-### All Phases Completed! ✅
-- **Phase 1** ✅: Document cache infrastructure (`DocumentCache`)
-- **Phase 2** ✅: UI integration with download caching
-- **Phase 3** ✅: Parsed document caching (avoid LlamaParse API calls)
-- **Phase 4** ✅: Document chunking system (`DocumentChunker`)
-- **Phase 5** ✅: Integration of chunking with cache and ChromaDB
-- **Phase 6** ✅: ChromaDB duplicate checking and cache management
-- **Phase 7** ✅: UI improvements with progress bars and detailed logging
-
-See `docs/ingestion-improvement-plan.md` for detailed implementation plan.
+- **Document Cache Infrastructure**: File-based caching system for original documents, parsed content, and chunks
+- **UI Integration**: Settings interface with progress tracking and cache management
+- **Parsed Document Caching**: Avoids redundant LlamaParse API calls
+- **Document Chunking System**: Configurable text splitting with overlap for better retrieval
+- **ChromaDB Integration**: Duplicate checking and cache synchronization
+- **Enhanced UI**: Progress bars, detailed logging, and cache statistics
 
 ## Architecture
 
@@ -69,9 +65,9 @@ Before committing changes, always:
 - `src/ui/settings.py`: Admin interface for indexing new documents (only available in dev environment)
 - `.streamlit/secrets.toml.SAMPLE`: Template for API keys configuration
 
-### Document Processing (New in chunking branch)
+### Document Processing
 - `src/retrieval/document.py`: Document processing with LlamaParse and cache integration
-- `src/repositories/document_cache.py`: Cache system for documents (original & parsed)
+- `src/repositories/document_cache.py`: Cache system for documents (original, parsed & chunks)
 - `src/services/document_chunker.py`: Chunking system for splitting documents
 
 ### Cache Structure
@@ -81,7 +77,7 @@ Before committing changes, always:
 │   ├── metadata.json    # URL, timestamps, processing status
 │   ├── original.bin     # Original downloaded document
 │   ├── parsed.md        # LlamaParse output
-│   └── chunks.json      # (Future) Chunked document
+│   └── chunks.json      # Chunked document segments
 ```
 
 ## Important Implementation Details
@@ -101,11 +97,13 @@ Before committing changes, always:
 
 4. **Environment-based Features**: Settings page for document indexing only appears when `langfuse_environment` is set to "dev"
 
-5. **Caching System** (New in chunking branch):
+5. **Caching System**:
    - Three-level cache: original → parsed → chunks
    - Avoids re-downloads and re-processing
    - Uses URL hash for unique identification
    - Tracks processing status in metadata
+   - ChromaDB duplicate checking prevents redundant indexing
+   - Cache management UI with cleanup options
 
 6. **Chunking Configuration**:
    - Default chunk size: 1000 characters

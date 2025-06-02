@@ -69,12 +69,12 @@ graph TD
 
 **Valor**: Evita reprocessamento pelo LlamaParse (economia de API calls)
 
-### Fase 4: Sistema de Chunking (✅ Entregável: Documentos divididos)
-- [ ] Criar `DocumentChunker` em `src/services/document_chunker.py`
-- [ ] Implementar algoritmo de chunking com overlap
-- [ ] Definir estrutura de dados para chunks
-- [ ] Adicionar configurações (chunk_size, overlap)
-- [ ] Criar testes com diferentes tipos de texto
+### Fase 4: Sistema de Chunking (✅ Entregável: Documentos divididos) ✅ CONCLUÍDA
+- [x] Criar `DocumentChunker` em `src/services/document_chunker.py`
+- [x] Implementar algoritmo de chunking com overlap
+- [x] Definir estrutura de dados para chunks
+- [x] Adicionar configurações (chunk_size, overlap)
+- [x] Criar testes com diferentes tipos de texto
 
 **Valor**: Melhora a precisão do retrieval com chunks menores
 

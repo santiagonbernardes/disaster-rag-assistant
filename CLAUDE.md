@@ -6,6 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Disaster RAG Assistant is an intelligent virtual assistant using RAG (Retrieval-Augmented Generation) architecture to provide personalized, contextual guidance for natural disaster response. It serves victims, residents, and families with real-time safety information, evacuation procedures, and emergency resources in Portuguese.
 
+## Current Project Status (Branch: chunking)
+
+The project is implementing an improved document ingestion system with caching and chunking capabilities. Progress so far:
+
+### Completed Phases:
+- **Phase 1** ✅: Document cache infrastructure (`DocumentCache`)
+- **Phase 2** ✅: UI integration with download caching
+- **Phase 3** ✅: Parsed document caching (avoid LlamaParse API calls)
+- **Phase 4** ✅: Document chunking system (`DocumentChunker`)
+
+### Pending Phases:
+- **Phase 5**: Integration of chunking with cache
+- **Phase 6**: ChromaDB duplicate checking
+- **Phase 7**: UI improvements and observability
+
+See `docs/ingestion-improvement-plan.md` for detailed implementation plan.
+
 ## Architecture
 
 The application uses:
@@ -48,11 +65,26 @@ Before committing changes, always:
 
 ## Key Files and Structure
 
+### Core Application
 - `app.py`: Entry point, configures Langfuse integration and Streamlit pages
 - `src/ui/chatbot.py`: Main chat interface with RAG implementation
 - `src/ui/settings.py`: Admin interface for indexing new documents (only available in dev environment)
-- `src/retrieval/document.py`: Document processing with LlamaParse
 - `.streamlit/secrets.toml.SAMPLE`: Template for API keys configuration
+
+### Document Processing (New in chunking branch)
+- `src/retrieval/document.py`: Document processing with LlamaParse and cache integration
+- `src/repositories/document_cache.py`: Cache system for documents (original & parsed)
+- `src/services/document_chunker.py`: Chunking system for splitting documents
+
+### Cache Structure
+```
+.cache/documents/
+├── {url_hash}/
+│   ├── metadata.json    # URL, timestamps, processing status
+│   ├── original.bin     # Original downloaded document
+│   ├── parsed.md        # LlamaParse output
+│   └── chunks.json      # (Future) Chunked document
+```
 
 ## Important Implementation Details
 
@@ -70,6 +102,18 @@ Before committing changes, always:
    - Formats retrieved documents for prompt augmentation
 
 4. **Environment-based Features**: Settings page for document indexing only appears when `langfuse_environment` is set to "dev"
+
+5. **Caching System** (New in chunking branch):
+   - Three-level cache: original → parsed → chunks
+   - Avoids re-downloads and re-processing
+   - Uses URL hash for unique identification
+   - Tracks processing status in metadata
+
+6. **Chunking Configuration**:
+   - Default chunk size: 1000 characters
+   - Default overlap: 200 characters
+   - Preserves sentence boundaries
+   - Maintains chunk position tracking
 
 ## Configuration
 

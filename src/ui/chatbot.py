@@ -2,7 +2,7 @@ import sys
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 # Fix for ChromaDB SQLite compatibility on Streamlit Cloud
 try:
@@ -27,11 +27,12 @@ PROFILE_OPTIONS = {
 @dataclass
 class ChatMessage:
     """Modelo de dados para mensagens do chat."""
+
     role: str  # "user" | "assistant"
     content: str  # Conteúdo limpo para exibição ao usuário
     timestamp: datetime
-    raw_content: Optional[str] = None  # Conteúdo original com contexto (para debugging)
-    retrieval_context: Optional[str] = None  # Para debugging/observabilidade
+    raw_content: str | None = None  # Conteúdo original com contexto (para debugging)
+    retrieval_context: str | None = None  # Para debugging/observabilidade
 
 
 @st.cache_resource(show_spinner=True)
@@ -47,12 +48,19 @@ def collection():
 
 # === Utilitários para Gerenciamento de Histórico Local ===
 
+
 def init_chat_history():
     """Inicializa o histórico do chat no session_state."""
     if "chat_history" not in st.session_state:
-        st.session_state.chat_history: List[ChatMessage] = []
+        st.session_state.chat_history: list[ChatMessage] = []
 
-def add_message_to_history(role: str, content: str, raw_content: Optional[str] = None, retrieval_context: Optional[str] = None):
+
+def add_message_to_history(
+    role: str,
+    content: str,
+    raw_content: str | None = None,
+    retrieval_context: str | None = None,
+):
     """Adiciona uma mensagem ao histórico local."""
     init_chat_history()
     message = ChatMessage(
@@ -60,38 +68,42 @@ def add_message_to_history(role: str, content: str, raw_content: Optional[str] =
         content=content,  # Versão limpa para exibição
         timestamp=datetime.now(),
         raw_content=raw_content,  # Versão com contexto para debugging
-        retrieval_context=retrieval_context
+        retrieval_context=retrieval_context,
     )
     st.session_state.chat_history.append(message)
 
-def get_chat_history() -> List[ChatMessage]:
+
+def get_chat_history() -> list[ChatMessage]:
     """Retorna o histórico do chat."""
     init_chat_history()
     return st.session_state.chat_history
 
+
 def clear_chat_history():
     """Limpa o histórico do chat."""
     st.session_state.chat_history = []
+
 
 def get_conversation_context() -> str:
     """Retorna o contexto da conversa para o LLM."""
     history = get_chat_history()
     if not history:
         return ""
-    
+
     # Pega as últimas 10 mensagens para contexto
     recent_messages = history[-10:]
     context_parts = []
-    
+
     for msg in recent_messages:
         context_parts.append(f"{msg.role}: {msg.content}")
-    
+
     return "\n".join(context_parts)
+
 
 def render_local_chat_history():
     """Renderiza o histórico local sem system prompts ou contexto RAG."""
     history = get_chat_history()
-    
+
     for message in history:
         with st.chat_message(message.role):
             st.markdown(message.content)  # Apenas o conteúdo limpo
@@ -151,17 +163,17 @@ def render_chat_history():
 def get_retrieved_documents(user_prompt):
     # Get user profile-based metadata filter
     metadata_filter = get_profile_based_filter()
-    
+
     # Log filter information for observability
     filter_info = {
         "user_profile": st.session_state.get("user_profile", "none"),
         "filter_applied": metadata_filter is not None,
         "filter_conditions": (
             len(metadata_filter.get("$or", [])) if metadata_filter else 0
-        )
+        ),
     }
     print(f"Retrieval filter info: {filter_info}")
-    
+
     # Retrieve documents with optional filtering
     documents = retrieve_documents(user_prompt, metadata_filter)
     relevant_docs = get_relevant_documents(documents)
@@ -174,8 +186,9 @@ def get_retrieved_documents(user_prompt):
         "relevant_docs_found": len(relevant_docs),
         "filter_effectiveness": (
             len(relevant_docs) / max(len(documents.get("ids", [[]])[0]), 1)
-            if documents.get("ids") else 0
-        )
+            if documents.get("ids")
+            else 0
+        ),
     }
     print(f"Retrieval stats: {retrieval_stats}")
 
@@ -195,15 +208,15 @@ def get_retrieved_documents(user_prompt):
 def get_profile_based_filter():
     """
     Generate metadata filter based on user profile.
-    
+
     Returns:
         Dictionary with ChromaDB where conditions or None
     """
     if "user_profile" not in st.session_state:
         return None
-    
+
     user_profile = st.session_state.user_profile
-    
+
     # Profile-based filtering
     profile_filters = {
         "victim": {
@@ -230,7 +243,7 @@ def get_profile_based_filter():
             ]
         },
     }
-    
+
     return profile_filters.get(user_profile)
 
 
@@ -238,13 +251,13 @@ def get_profile_based_filter():
 def retrieve_documents(user_prompt, metadata_filter=None):
     query_params = {
         "query_texts": user_prompt,
-        "n_results": 5  # Increased to get more candidates for filtering
+        "n_results": 5,  # Increased to get more candidates for filtering
     }
-    
+
     # Add metadata filter if provided
     if metadata_filter:
         query_params["where"] = metadata_filter
-    
+
     return collection().query(**query_params)
 
 
@@ -269,7 +282,7 @@ def get_relevant_documents(documents):
         "documents_with_metadata": 0,
         "documents_with_confidence": 0,
         "avg_confidence": 0,
-        "metadata_fields_found": set()
+        "metadata_fields_found": set(),
     }
 
     documents_data = zip(
@@ -281,17 +294,17 @@ def get_relevant_documents(documents):
     )
 
     confidence_scores = []
-    
+
     for doc_id, distance, document, metadata in documents_data:
         # Track metadata statistics
         if metadata:
             metadata_stats["documents_with_metadata"] += 1
             metadata_stats["metadata_fields_found"].update(metadata.keys())
-            
+
             if "confidence_score" in metadata:
                 metadata_stats["documents_with_confidence"] += 1
                 confidence_scores.append(metadata["confidence_score"])
-        
+
         if distance < SIMILARITY_THRESHOLD:
             # Extract URL from metadata or from doc_id
             url = metadata.get("url", doc_id.split("#")[0] if "#" in doc_id else doc_id)
@@ -308,14 +321,14 @@ def get_relevant_documents(documents):
 
     # Calculate final statistics
     if confidence_scores:
-        metadata_stats["avg_confidence"] = (
-            sum(confidence_scores) / len(confidence_scores)
+        metadata_stats["avg_confidence"] = sum(confidence_scores) / len(
+            confidence_scores
         )
     metadata_stats["metadata_fields_found"] = list(
         metadata_stats["metadata_fields_found"]
     )
     metadata_stats["docs_passed_similarity"] = len(relevant_docs)
-    
+
     print(f"Document filtering stats: {metadata_stats}")
 
     return relevant_docs
@@ -328,7 +341,9 @@ def get_an_response(user_prompt):
 
     retrieved_docs = get_retrieved_documents(user_prompt)
 
-    compiled_prompt = prompt_client.compile(context=retrieved_docs, question=user_prompt)
+    compiled_prompt = prompt_client.compile(
+        context=retrieved_docs, question=user_prompt
+    )
 
     return client().responses.create(
         model=prompt_client.config["model"],
@@ -339,27 +354,85 @@ def get_an_response(user_prompt):
     )
 
 
+@observe
+def get_streaming_response(user_prompt):
+    """Nova função para streaming response com observabilidade Langfuse."""
+    langfuse_context.update_current_observation(session_id=st.session_state.session_id)
+    prompt_client = st.session_state.prompt
+
+    retrieved_docs = get_retrieved_documents(user_prompt)
+    compiled_prompt = prompt_client.compile(
+        context=retrieved_docs, question=user_prompt
+    )
+
+    # Usar chat.completions.create diretamente para streaming
+    stream = client().chat.completions.create(
+        model=prompt_client.config["model"],
+        temperature=prompt_client.config["temperature"],
+        messages=compiled_prompt,
+        stream=True,
+    )
+
+    # Generator para st.write_stream
+    full_response = ""
+    for chunk in stream:
+        if chunk.choices[0].delta.content:
+            content = chunk.choices[0].delta.content
+            full_response += content
+            yield content
+
+    # Criar trace manual para Langfuse com resposta completa
+    try:
+        langfuse_context.update_current_observation(
+            input=user_prompt,
+            output=full_response,
+            metadata={
+                "user_profile": st.session_state.get("user_profile"),
+                "retrieval_context_length": len(retrieved_docs)
+                if retrieved_docs
+                else 0,
+                "streaming": True,
+            },
+        )
+    except Exception as e:
+        print(f"Erro ao atualizar observação Langfuse: {e}")
+
+    # Armazenar resposta completa no histórico local
+    add_message_to_history(
+        role="assistant",
+        content=full_response,
+        raw_content=str(compiled_prompt),  # Para debugging
+        retrieval_context=retrieved_docs,
+    )
+
+
 @st.fragment
 def render_chat():
-    render_chat_history()
-    if prompt := st.chat_input("Type a message"):
+    # Renderizar histórico local (limpo) ao invés do histórico Langfuse
+    render_local_chat_history()
+
+    if prompt := st.chat_input("Digite sua mensagem..."):
+        # Adicionar mensagem do usuário ao histórico local
+        add_message_to_history(role="user", content=prompt)
+
+        # Mostrar mensagem do usuário
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        response = get_an_response(prompt)
+        # Mostrar resposta streaming do assistente
+        with st.chat_message("assistant"):
+            st.write_stream(get_streaming_response(prompt))
 
-        st.session_state.last_response = response.output_text
-        st.session_state.previous_response_id = response.id
         st.rerun(scope="fragment")
 
 
 def main():
     st.title("🚨 Assistente Virtual para Orientação em Desastres Naturais")
-    
+
     if "user_profile" not in st.session_state:
         prompt_user_for_profile()
         return
-    
+
     # Inicialização do session state
     if "previous_response_id" not in st.session_state:
         st.session_state.previous_response_id = None
@@ -369,10 +442,10 @@ def main():
         st.session_state.session_id = uuid.uuid4().hex
     if "prompt" not in st.session_state:
         st.session_state.prompt = get_prompt(st.session_state.user_profile)
-    
+
     # Inicializar novo sistema de histórico local
     init_chat_history()
-    
+
     render_chat()
 
 

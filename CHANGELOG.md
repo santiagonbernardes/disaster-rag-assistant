@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/santiagonbernardes/disaster-rag-assistant/compare/v0.2.1...v1.0.0) (2025-06-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* improves retrieval with chunking and metadata. improves ux. ([#8](https://github.com/santiagonbernardes/disaster-rag-assistant/issues/8))
+
+### Features
+
+* improves retrieval with chunking and metadata. improves ux. ([#8](https://github.com/santiagonbernardes/disaster-rag-assistant/issues/8)) ([c9b0526](https://github.com/santiagonbernardes/disaster-rag-assistant/commit/c9b052656970ef9c324c1e3b2d2630688fde2f01))
+
 ## [0.2.1](https://github.com/santiagonbernardes/disaster-rag-assistant/compare/v0.2.0...v0.2.1) (2025-06-01)
 
 

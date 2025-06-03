@@ -1,0 +1,191 @@
+import pytest
+from unittest.mock import Mock, patch
+from src.services.metadata_extractor import MetadataExtractor, DocumentMetadata, LLMMetadataResponse
+
+
+class TestMetadataExtractor:
+    """Test cases for MetadataExtractor service."""
+    
+    @pytest.fixture
+    def mock_llm_client(self):
+        """Mock OpenAI client for testing."""
+        return Mock()
+    
+    @pytest.fixture
+    def extractor(self, mock_llm_client):
+        """MetadataExtractor instance for testing."""
+        return MetadataExtractor(mock_llm_client)
+    
+    def test_deterministic_extraction_defesa_civil_url(self, extractor):
+        """Test deterministic extraction from Defesa Civil URL."""
+        url = "https://www.defesacivil.gov.br/manual-enchentes.pdf"
+        content = "Este manual sobre enchentes contém procedimentos de evacuação urgente."
+        
+        result = extractor._extract_deterministic(content, url)
+        
+        assert result["source_authority"] == "defesa_civil"
+        assert result["authority_level"] == "federal"
+        assert "flood" in result["disaster_categories"]
+        assert result["urgency_level"] == "critical"
+        assert result["has_instructions"] is False  # No numbered steps
+    
+    def test_deterministic_extraction_disaster_keywords(self, extractor):
+        """Test disaster category detection from keywords."""
+        content = "Procedimentos para incêndio florestal e deslizamento de terra."
+        url = "https://example.com/manual.pdf"
+        
+        result = extractor._extract_deterministic(content, url)
+        
+        assert "fire" in result["disaster_categories"]
+        assert "landslide" in result["disaster_categories"]
+    
+    def test_deterministic_extraction_urgency_levels(self, extractor):
+        """Test urgency level detection."""
+        test_cases = [
+            ("evacuação imediata necessária", "critical"),
+            ("alerta para região", "high"),
+            ("orientação preventiva", "medium"),
+            ("informação geral", "low"),
+        ]
+        
+        for content, expected_level in test_cases:
+            result = extractor._extract_deterministic(content, "https://example.com")
+            assert result["urgency_level"] == expected_level
+    
+    def test_deterministic_extraction_structural_elements(self, extractor):
+        """Test detection of structural elements."""
+        content = """
+        1. Primeiro passo do procedimento
+        2. Segundo passo
+        
+        Contatos de emergência: 193, 190
+        Localização: Rua das Flores, 123
+        """
+        
+        result = extractor._extract_deterministic(content, "https://example.com")
+        
+        assert result["has_instructions"] is True
+        assert result["has_emergency_contacts"] is True
+        assert result["has_maps"] is True
+    
+    def test_chunk_metadata_extraction(self, extractor):
+        """Test chunk-specific metadata extraction."""
+        chunk_content = """
+        Procedimentos de evacuação:
+        1. Mantenha a calma
+        2. Siga as orientações
+        Telefone de emergência: 193
+        """
+        
+        result = extractor.extract_chunk_metadata(chunk_content)
+        
+        assert result["section_type"] == "procedures"
+        assert result["has_emergency_contacts"] is True
+        assert result["has_instructions"] is True
+        assert result["instruction_density"] > 0
+    
+    def test_llm_extraction_success(self, extractor, mock_llm_client):
+        """Test successful LLM metadata extraction."""
+        # Mock LLM response
+        mock_response = Mock()
+        mock_response.output_parsed = LLMMetadataResponse(
+            document_type="manual",
+            information_type="response", 
+            target_audience=["victim"],
+            area_type="urban",
+            disaster_phase="during"
+        )
+        mock_llm_client.responses.create.return_value = mock_response
+        
+        content = "Manual de evacuação para enchentes em área urbana."
+        
+        result = extractor._extract_with_llm(content)
+        
+        assert isinstance(result, LLMMetadataResponse)
+        assert result.document_type == "manual"
+        assert result.information_type == "response"
+        assert "victim" in result.target_audience
+        assert result.area_type == "urban"
+        assert result.disaster_phase == "during"
+    
+    def test_llm_extraction_failure(self, extractor, mock_llm_client):
+        """Test LLM extraction failure handling."""
+        # Mock LLM failure
+        mock_llm_client.responses.create.side_effect = Exception("API Error")
+        
+        content = "Some content"
+        
+        result = extractor._extract_with_llm(content)
+        
+        assert result is None
+    
+    def test_confidence_calculation(self, extractor):
+        """Test confidence score calculation."""
+        metadata = {
+            "source_authority": "defesa_civil",
+            "disaster_categories": ["flood"],
+            "has_emergency_contacts": True,
+            "has_instructions": True,
+        }
+        
+        # Test with long content
+        long_content = " ".join(["word"] * 600)
+        confidence = extractor._calculate_confidence(metadata, long_content)
+        
+        assert confidence == 1.0  # Should hit max confidence
+        
+        # Test with short content
+        short_content = "short text"
+        confidence = extractor._calculate_confidence({}, short_content)
+        
+        assert confidence == 0.0  # No metadata, short content
+    
+    def test_extract_document_metadata_integration(self, extractor, mock_llm_client):
+        """Test full document metadata extraction."""
+        # Mock LLM response
+        mock_response = Mock()
+        mock_response.output_parsed = LLMMetadataResponse(
+            document_type="guide",
+            information_type="preparation",
+            target_audience=["resident"],
+            area_type="general",
+            disaster_phase="before"
+        )
+        mock_llm_client.responses.create.return_value = mock_response
+        
+        url = "https://www.defesacivil.gov.br/enchentes.pdf"
+        content = "Guia de preparação para enchentes com orientações preventivas."
+        
+        result = extractor.extract_document_metadata(content, url)
+        
+        assert isinstance(result, DocumentMetadata)
+        assert result.document_type == "guide"
+        assert result.information_type == "preparation"
+        assert "resident" in result.target_audience
+        assert result.source_authority == "defesa_civil"
+        assert result.authority_level == "federal"
+        assert "flood" in result.disaster_categories
+        assert result.urgency_level == "medium"
+        assert result.confidence_score > 0
+        assert result.extraction_timestamp is not None
+    
+    def test_metadata_to_dict(self):
+        """Test DocumentMetadata to_dict conversion."""
+        metadata = DocumentMetadata(
+            document_type="manual",
+            disaster_categories=["flood"],
+            information_type="response",
+            target_audience=["victim"],
+            urgency_level="high",
+            disaster_phase="during",
+            source_authority="defesa_civil",
+            confidence_score=0.85,
+            extraction_timestamp="2024-01-01T00:00:00"
+        )
+        
+        result = metadata.to_dict()
+        
+        assert result["document_type"] == "manual"
+        assert result["disaster_categories"] == ["flood"]
+        assert result["confidence_score"] == 0.85
+        assert "extraction_timestamp" in result

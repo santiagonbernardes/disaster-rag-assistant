@@ -1,5 +1,7 @@
 import sys
 import uuid
+from dataclasses import dataclass
+from datetime import datetime
 
 # Fix for ChromaDB SQLite compatibility on Streamlit Cloud
 try:
@@ -14,11 +16,26 @@ import streamlit as st
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import OpenAI
 
+from src.core import get_logger
+
+logger = get_logger(__name__)
+
 PROFILE_OPTIONS = {
     "victim": {"label": "Vítima", "prompt": "victim"},
     "resident": {"label": "Residente", "prompt": "resident"},
     "family": {"label": "Familiar", "prompt": "family"},
 }
+
+
+@dataclass
+class ChatMessage:
+    """Data model for chat messages."""
+
+    role: str  # "user" | "assistant"
+    content: str  # Clean content for user display
+    timestamp: datetime
+    raw_content: str | None = None  # Original content with context (for debugging)
+    retrieval_context: str | None = None  # For debugging/observability
 
 
 @st.cache_resource(show_spinner=True)
@@ -32,6 +49,120 @@ def collection():
     return chroma.get_or_create_collection(name="disaster-documents")
 
 
+# === Local History Management Utilities ===
+
+# Memory configuration
+MAX_CHAT_HISTORY = 50  # Maximum messages in history
+CONTEXT_WINDOW = 10  # Messages used for LLM context
+
+
+def init_chat_history():
+    """Initialize chat history in session_state."""
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history: list[ChatMessage] = []
+
+
+def add_message_to_history(
+    role: str,
+    content: str,
+    raw_content: str | None = None,
+    retrieval_context: str | None = None,
+):
+    """Add a message to local history with memory management."""
+    init_chat_history()
+    message = ChatMessage(
+        role=role,
+        content=content,  # Clean version for display
+        timestamp=datetime.now(),
+        raw_content=raw_content,  # Version with context for debugging
+        retrieval_context=retrieval_context,
+    )
+    st.session_state.chat_history.append(message)
+
+    # Memory management: keep only the latest messages
+    if len(st.session_state.chat_history) > MAX_CHAT_HISTORY:
+        st.session_state.chat_history = st.session_state.chat_history[
+            -MAX_CHAT_HISTORY:
+        ]
+
+
+def get_chat_history() -> list[ChatMessage]:
+    """Return chat history."""
+    init_chat_history()
+    return st.session_state.chat_history
+
+
+def clear_chat_history():
+    """Clear chat history."""
+    st.session_state.chat_history = []
+
+
+def generate_fallback_response() -> str:
+    """Generate fallback response when no relevant documents are found."""
+    user_profile = st.session_state.get("user_profile", "victim")
+
+    fallback_messages = {
+        "victim": (
+            "Não encontrei informações específicas sobre sua situação na "
+            "documentação disponível. Para orientações imediatas e emergenciais, "
+            "recomendo entrar em contato com:\n\n"
+            "🚨 **Defesa Civil**: 199\n"
+            "🚨 **Bombeiros**: 193\n"
+            "🚨 **SAMU**: 192\n"
+            "🚨 **Polícia**: 190\n\n"
+            "Em caso de risco iminente, não hesite em buscar ajuda imediatamente."
+        ),
+        "resident": (
+            "Não encontrei documentação específica sobre este tópico na base de "
+            "conhecimento. Para informações sobre prevenção e preparação para "
+            "desastres naturais, recomendo:\n\n"
+            "📞 **Defesa Civil Municipal**: Consulte o órgão da sua cidade\n"
+            "📞 **Defesa Civil Estadual**: 199\n"
+            "🌐 **Portal da Defesa Civil**: Acesse o site oficial do seu estado\n\n"
+            "Tente reformular sua pergunta ou seja mais específico sobre o tipo "
+            "de desastre ou situação."
+        ),
+        "family": (
+            "Não localizei informações sobre este assunto na documentação "
+            "disponível. Para orientações e contatos de emergência:\n\n"
+            "📞 **Defesa Civil**: 199\n"
+            "📞 **Bombeiros**: 193\n"
+            "📞 **Cruz Vermelha**: Consulte o núcleo da sua região\n"
+            "📞 **Assistência Social**: Procure o CRAS mais próximo\n\n"
+            "Tente fazer uma pergunta mais específica sobre o tipo de desastre "
+            "ou situação que você precisa de orientação."
+        ),
+    }
+
+    return fallback_messages.get(user_profile, fallback_messages["victim"])
+
+
+def get_conversation_context() -> str:
+    """Return conversation context for LLM with optimized window."""
+    history = get_chat_history()
+    if not history:
+        return ""
+
+    # Use configurable context window
+    recent_messages = history[-CONTEXT_WINDOW:]
+    context_parts = []
+
+    for msg in recent_messages:
+        context_parts.append(f"{msg.role}: {msg.content}")
+
+    return "\n".join(context_parts)
+
+
+def render_local_chat_history():
+    """Render optimized local history without system prompts or RAG context."""
+    history = get_chat_history()
+
+    # Optimized rendering: avoid re-rendering all messages
+    for message in history:
+        with st.chat_message(message.role, avatar=None):
+            st.markdown(message.content)  # Only clean content
+
+
 def format_profile_options(option):
     return PROFILE_OPTIONS[option]["label"]
 
@@ -43,7 +174,7 @@ def get_prompt(profile):
 
 def prompt_user_for_profile():
     with st.form(key="user_profile_form"):
-        st.markdown("### 🚨 Assistente Virtual para Orientação em Desastres Naturais")
+        st.markdown("### Bem-vindo ao Assistente de Desastres Naturais")
         st.markdown(
             "Olá! Sou seu assistente virtual especializado em orientações "
             "para situações de emergência e desastres naturais."
@@ -53,7 +184,7 @@ def prompt_user_for_profile():
             "**Para melhor atendê-lo, por favor selecione seu perfil:**",
             options=PROFILE_OPTIONS.keys(),
             placeholder="Selecione seu perfil",
-            key="user_profile",
+            key="profile_selector",  # Changed key to avoid conflict
             format_func=format_profile_options,
         )
 
@@ -62,41 +193,106 @@ def prompt_user_for_profile():
                 st.error("Por favor, selecione um perfil antes de continuar.")
             else:
                 st.session_state.user_profile = select_box
+                st.rerun()  # Force rerun after setting profile
 
 
-def render_chat_history():
-    previous_response_id = st.session_state.previous_response_id
-    if previous_response_id is None:
-        st.empty()
-        return
-
-    all_messages = (
-        client().responses.input_items.list(previous_response_id, order="asc").data
-    )
-
-    for message in all_messages:
-        with st.chat_message(message.role):
-            st.markdown(message.content[0].text)
-
-    with st.chat_message("assistant"):
-        st.markdown(st.session_state.last_response)
-
-
+@observe(name="document_retrieval_with_metadata")
 def get_retrieved_documents(user_prompt):
-    documents = retrieve_documents(user_prompt)
+    # Get user profile-based metadata filter
+    metadata_filter = get_profile_based_filter()
+
+    # Log filter information for observability
+    filter_info = {
+        "user_profile": st.session_state.get("user_profile", "none"),
+        "filter_applied": metadata_filter is not None,
+        "filter_conditions": (
+            len(metadata_filter.get("$or", [])) if metadata_filter else 0
+        ),
+    }
+    logger.debug(f"Retrieval filter info: {filter_info}")
+
+    # Retrieve documents with optional filtering
+    documents = retrieve_documents(user_prompt, metadata_filter)
     relevant_docs = get_relevant_documents(documents)
+
+    # Log retrieval results
+    retrieval_stats = {
+        "total_candidates": (
+            len(documents.get("ids", [[]])[0]) if documents.get("ids") else 0
+        ),
+        "relevant_docs_found": len(relevant_docs),
+        "filter_effectiveness": (
+            len(relevant_docs) / max(len(documents.get("ids", [[]])[0]), 1)
+            if documents.get("ids")
+            else 0
+        ),
+    }
+    logger.info(f"Retrieval stats: {retrieval_stats}")
 
     if not relevant_docs:
         return ""
 
-    return "\n".join(
-        [f"Documento {i + 1}: {doc}" for i, doc in enumerate(relevant_docs)]
-    )
+    formatted_docs = []
+    for i, doc in enumerate(relevant_docs):
+        chunk_info = doc.get("chunk_info", "")
+        doc_header = f"Documento {i + 1} - URL: {doc['url']} {chunk_info}"
+        doc_content = doc["content"]
+        formatted_docs.append(f"{doc_header}\n{doc_content}")
+
+    return "\n\n".join(formatted_docs)
+
+
+def get_profile_based_filter():
+    """
+    Generate metadata filter based on user profile.
+
+    Returns:
+        Dictionary with ChromaDB where conditions or None
+    """
+    if "user_profile" not in st.session_state:
+        return None
+
+    user_profile = st.session_state.user_profile
+
+    # Profile-based filtering
+    profile_filters = {
+        "victim": {
+            # Victims need immediate response information
+            "$or": [
+                {"information_type": "response"},
+                {"urgency_level": {"$in": ["critical", "high"]}},
+                {"target_audience": "victim"},
+            ]
+        },
+        "resident": {
+            # Residents need preparation and prevention info
+            "$or": [
+                {"information_type": {"$in": ["prevention", "preparation"]}},
+                {"target_audience": {"$in": ["resident", "victim"]}},
+            ]
+        },
+        "family": {
+            # Families need general guidance and contact information
+            "$or": [
+                {"target_audience": {"$in": ["family", "victim"]}},
+                {"has_emergency_contacts": True},
+                {"information_type": {"$in": ["response", "recovery"]}},
+            ]
+        },
+    }
+
+    return profile_filters.get(user_profile)
 
 
 @observe(name="retrieval")
-def retrieve_documents(user_prompt):
-    return collection().query(query_texts=user_prompt, n_results=2)
+def retrieve_documents(user_prompt, metadata_filter=None):
+    query_params = {"query_texts": user_prompt, "n_results": 7}
+
+    # Add metadata filter if provided
+    if metadata_filter:
+        query_params["where"] = metadata_filter
+
+    return collection().query(**query_params)
 
 
 @observe(name="retrieval_filtering")
@@ -106,69 +302,228 @@ def get_relevant_documents(documents):
     # 0 is identical. As far away from it, the more different the
     # document is from the query.
 
-    SIMILARITY_THRESHOLD = 1.3
+    SIMILARITY_THRESHOLD = 0.995  # after local testing, good threshold
     relevant_docs = []
+
+    # Handle metadatas if available
+    metadatas = documents.get("metadatas", [[{} for _ in documents["ids"][0]]])
+
+    # Track metadata for observability
+    metadata_stats = {
+        "total_candidates": (
+            len(documents.get("ids", [[]])[0]) if documents.get("ids") else 0
+        ),
+        "documents_with_metadata": 0,
+        "documents_with_confidence": 0,
+        "avg_confidence": 0,
+        "metadata_fields_found": set(),
+    }
+
     documents_data = zip(
         documents["ids"][0],
         documents["distances"][0],
         documents["documents"][0],
+        metadatas[0],
         strict=True,
     )
 
-    for doc_id, distance, document in documents_data:
+    confidence_scores = []
+
+    for doc_id, distance, document, metadata in documents_data:
+        # Track metadata statistics
+        if metadata:
+            metadata_stats["documents_with_metadata"] += 1
+            metadata_stats["metadata_fields_found"].update(metadata.keys())
+
+            if "confidence_score" in metadata:
+                metadata_stats["documents_with_confidence"] += 1
+                confidence_scores.append(metadata["confidence_score"])
+
         if distance < SIMILARITY_THRESHOLD:
-            relevant_docs.append({"url": doc_id, "content": document})
+            # Extract URL from metadata or from doc_id
+            url = metadata.get("url", doc_id.split("#")[0] if "#" in doc_id else doc_id)
+
+            doc_info = {"url": url, "content": document}
+
+            # Add chunk info if this is a chunk
+            if "#chunk_" in doc_id:
+                chunk_idx = metadata.get("chunk_index", doc_id.split("_")[-1])
+                total_chunks = metadata.get("total_chunks", "?")
+                doc_info["chunk_info"] = f"(Trecho {chunk_idx + 1} de {total_chunks})"
+
+            relevant_docs.append(doc_info)
+
+    # Calculate final statistics
+    if confidence_scores:
+        metadata_stats["avg_confidence"] = sum(confidence_scores) / len(
+            confidence_scores
+        )
+    metadata_stats["metadata_fields_found"] = list(
+        metadata_stats["metadata_fields_found"]
+    )
+    metadata_stats["docs_passed_similarity"] = len(relevant_docs)
+
+    logger.info(f"Document filtering stats: {metadata_stats}")
 
     return relevant_docs
 
 
 @observe
-def get_an_response(user_prompt):
+def get_streaming_response(user_prompt):
+    """New function for streaming response with Langfuse observability."""
     langfuse_context.update_current_observation(session_id=st.session_state.session_id)
     prompt_client = st.session_state.prompt
 
     retrieved_docs = get_retrieved_documents(user_prompt)
 
-    instruction = prompt_client.compile(retrieved_documents=retrieved_docs)[0][
-        "content"
-    ]
+    # Check if no relevant documents were found
+    if not retrieved_docs or len(retrieved_docs.strip()) == 0:
+        # Return fallback response immediately
+        fallback_response = generate_fallback_response()
 
-    return client().responses.create(
-        model="gpt-4.1-nano",
-        input=user_prompt,
-        instructions=instruction,
-        previous_response_id=st.session_state.previous_response_id,
-        langfuse_prompt=prompt_client,
+        # Update Langfuse observability with fallback response
+        try:
+            langfuse_context.update_current_observation(
+                input=user_prompt,
+                output=fallback_response,
+                metadata={
+                    "user_profile": st.session_state.get("user_profile"),
+                    "retrieval_context_length": 0,
+                    "fallback_response": True,
+                    "streaming": True,
+                    "session_id": st.session_state.session_id,
+                    "chat_history_length": len(get_chat_history()),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Error updating Langfuse observation: {e}")
+
+        # Store fallback response in local history
+        add_message_to_history(
+            role="assistant",
+            content=fallback_response,
+            raw_content="[FALLBACK_RESPONSE]",
+            retrieval_context="",
+        )
+
+        # Yield fallback response for streaming
+        yield from fallback_response
+        return
+
+    compiled_prompt = prompt_client.compile(
+        context=retrieved_docs, question=user_prompt
+    )
+
+    # Use chat.completions.create directly for streaming
+    stream = client().chat.completions.create(
+        model=prompt_client.config["model"],
+        temperature=prompt_client.config["temperature"],
+        messages=compiled_prompt,
+        stream=True,
+    )
+
+    # Generator for st.write_stream
+    full_response = ""
+    for chunk in stream:
+        if chunk.choices[0].delta.content:
+            content = chunk.choices[0].delta.content
+            full_response += content
+            yield content
+
+    # Update Langfuse observability with complete response
+    try:
+        langfuse_context.update_current_observation(
+            input=user_prompt,
+            output=full_response,
+            metadata={
+                "user_profile": st.session_state.get("user_profile"),
+                "retrieval_context_length": len(retrieved_docs)
+                if retrieved_docs
+                else 0,
+                "fallback_response": False,
+                "streaming": True,
+                "session_id": st.session_state.session_id,
+                "chat_history_length": len(get_chat_history()),
+            },
+        )
+    except Exception as e:
+        logger.warning(f"Error updating Langfuse observation: {e}")
+
+    # Store complete response in local history
+    add_message_to_history(
+        role="assistant",
+        content=full_response,
+        raw_content=str(compiled_prompt),  # For debugging
+        retrieval_context=retrieved_docs,
     )
 
 
-@st.fragment
 def render_chat():
-    render_chat_history()
-    if prompt := st.chat_input("Type a message"):
-        with st.chat_message("user"):
-            st.markdown(prompt)
+    # Render clean local history
+    render_local_chat_history()
 
-        response = get_an_response(prompt)
+    if prompt := st.chat_input("Digite sua mensagem..."):
+        try:
+            # Add user message to history
+            add_message_to_history(role="user", content=prompt)
 
-        st.session_state.last_response = response.output_text
-        st.session_state.previous_response_id = response.id
-        st.rerun(scope="fragment")
+            # Show user message
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            # Show streaming response with visual feedback
+            with st.chat_message("assistant"):
+                with st.spinner("🤔 Analisando documentos..."):
+                    # Brief delay to show processing feedback
+                    import time
+
+                    time.sleep(0.3)
+
+                # Stream the response
+                st.write_stream(get_streaming_response(prompt))
+
+            # Rerun to ensure history is displayed
+            st.rerun()
+        except Exception as e:
+            st.error(f"Erro ao processar mensagem: {str(e)}")
+            logger.error(f"Detailed error processing message: {e}", exc_info=True)
+            # Don't rerun on error to maintain state
 
 
 def main():
-    st.title("Simple bot")
+    st.title("🚨 Assistente Virtual para Orientação em Desastres Naturais")
+
     if "user_profile" not in st.session_state:
         prompt_user_for_profile()
         return
-    if "previous_response_id" not in st.session_state:
-        st.session_state.previous_response_id = None
-    if "last_response" not in st.session_state:
-        st.session_state.last_response = None
+
+    # Header with session information
+    col1, col2, col3 = st.columns([2, 1, 1])
+    with col1:
+        profile_label = PROFILE_OPTIONS[st.session_state.user_profile]["label"]
+        st.markdown(f"**Perfil:** {profile_label}")
+
+    with col2:
+        # Memory information
+        history_count = len(get_chat_history())
+        st.markdown(f"**Mensagens:** {history_count}/{MAX_CHAT_HISTORY}")
+
+    with col3:
+        # Button to clear history
+        if st.button("🗑️ Limpar chat", type="secondary"):
+            clear_chat_history()
+            st.rerun()
+
+    st.divider()
+
+    # Session state initialization (simplified)
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid.uuid4().hex
     if "prompt" not in st.session_state:
         st.session_state.prompt = get_prompt(st.session_state.user_profile)
+
+    # Initialize local history system
+    init_chat_history()
 
     render_chat()
 

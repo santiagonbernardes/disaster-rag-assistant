@@ -12,4 +12,7 @@ wheels/
 # IDE files
 .idea/
 
+# Application files  
 .streamlit/secrets.toml
+.cache/
+.logs/

@@ -1,0 +1,150 @@
+# Disaster RAG Assistant
+
+Assistente virtual inteligente usando arquitetura RAG (Retrieval-Augmented Generation) para fornecer orientações personalizadas e contextuais para resposta a desastres naturais. Atende vítimas, moradores e familiares com informações de segurança em tempo real, procedimentos de evacuação e recursos de emergência em português.
+
+## Características Principais
+
+- **Interface Web Interativa**: Interface Streamlit com navegação multi-página
+- **Sistema de Metadados Inteligente**: Extração automática de metadados estruturados usando regras determinísticas e classificação LLM
+- **Retrieval Contextualizado**: Filtragem automática baseada no perfil do usuário (vítima, residente, familiar)
+- **Processamento Inteligente de Documentos**: Sistema completo de cache e chunking com enriquecimento de metadados
+- **Busca Semântica Avançada**: ChromaDB com indexação de metadados para recuperação de documentos relevantes
+- **Observabilidade Completa**: Integração com Langfuse para monitoramento de extração de metadados e performance de retrieval
+
+## Funcionalidades Técnicas
+
+### Sistema de Extração de Metadados
+- **Extração Determinística**: Padrões de URL, regex de texto, detecção de elementos estruturais
+- **Classificação LLM**: Tipo de documento, categoria de desastre, público-alvo, nível de urgência
+- **Validação**: Verificações de consistência e pontuação de confiança
+- **Metadados por Chunk**: Tipo de seção, densidade de instruções, detecção de contatos de emergência
+
+### Retrieval Baseado em Perfil
+- **Vítimas**: Prioriza informações de resposta imediata e alta urgência
+- **Residentes**: Foca em prevenção e preparação
+- **Familiares**: Enfatiza contatos de emergência e informações de recuperação
+
+### Sistema de Cache Avançado
+- Cache de documentos originais, parseados e chunks enriquecidos com metadados
+- Prevenção automática de duplicatas
+- Gerenciamento de cache órfão
+- Interface de administração com estatísticas de qualidade de metadados
+
+### Processamento de Documentos
+- Parsing inteligente com LlamaParse
+- Chunking semântico configurável com metadados
+- Indexação baseada em chunks para melhor precisão
+- Barra de progresso, logs detalhados e alertas de validação
+
+### Busca e Recuperação Inteligente
+- Threshold de similaridade ajustável (padrão: 1.3)
+- Recuperação de top-5 documentos candidatos com filtragem por metadados
+- Contexto preservado com referências aos documentos originais e informações de metadados
+- Filtragem automática baseada no perfil do usuário
+
+### Observabilidade Langfuse
+- **Traces de Extração**: Observabilidade completa do processo de extração de metadados
+- **Métricas de Qualidade**: Scores de confiança, taxa de sucesso LLM, cobertura de metadados
+- **Performance de Retrieval**: Efetividade de filtros, relevância por perfil, estatísticas de uso
+- **Debugging**: Traces detalhados, logs estruturados, visibilidade de falhas
+
+## Tecnologias
+
+- **Frontend**: Streamlit
+- **LLM**: OpenAI GPT-4o-mini com structured outputs
+- **Vector Store**: ChromaDB com indexação de metadados
+- **Document Parsing**: LlamaParse
+- **Observabilidade**: Langfuse
+- **Cache**: Sistema de arquivos local
+
+## Instalação e Configuração
+
+### Pré-requisitos
+- Python 3.11+
+- Chaves de API: OpenAI, Langfuse, LlamaCloud
+
+### Instalação
+```bash
+# Clone o repositório
+git clone https://github.com/santiagonbernardes/disaster-rag-assistant.git
+cd disaster-rag-assistant
+
+# Instale dependências
+uv sync
+
+# Configure as chaves de API
+cp .streamlit/secrets.toml.SAMPLE .streamlit/secrets.toml
+# Edite o arquivo com suas chaves de API
+```
+
+### Execução
+```bash
+# Execute a aplicação
+uv run streamlit run app.py
+```
+
+## Uso
+
+1. **Selecione seu perfil**: Vítima, Residente ou Familiar
+2. **Faça perguntas**: O sistema automaticamente filtra documentos relevantes para seu perfil
+3. **Receba respostas contextualizadas**: Baseadas em documentos oficiais de desastres naturais
+
+## Administração (Ambiente de Desenvolvimento)
+
+1. Acesse a página **Settings** (disponível apenas em ambiente dev)
+2. **Indexe novos documentos**: Cole URLs de documentos oficiais
+3. **Monitore a qualidade**: Visualize estatísticas de metadados extraídos
+4. **Gerencie cache**: Visualize e limpe documentos em cache
+
+## Estrutura do Projeto
+
+```
+src/
+├── ui/                     # Interface Streamlit
+│   ├── chatbot.py         # Chat principal com retrieval inteligente
+│   └── settings.py        # Interface de administração
+├── retrieval/             # Sistema de documentos
+│   └── document.py        # Processamento e extração de metadados
+├── services/              # Serviços core
+│   ├── document_chunker.py      # Chunking semântico
+│   └── metadata_extractor.py   # Extração de metadados
+└── repositories/          # Camada de dados
+    └── document_cache.py  # Sistema de cache
+```
+
+## Metadados Extraídos
+
+### Nível de Documento
+- **document_type**: manual, guide, regulation, report, news
+- **disaster_categories**: flood, earthquake, fire, landslide, drought, storm
+- **information_type**: prevention, preparation, response, recovery
+- **target_audience**: victim, resident, family, authority
+- **urgency_level**: critical, high, medium, low
+- **disaster_phase**: before, during, after, general
+
+### Nível de Chunk
+- **section_type**: introduction, procedures, contacts, maps
+- **has_emergency_contacts**: Detecção de telefones de emergência
+- **has_instructions**: Presença de instruções numeradas
+- **instruction_density**: Densidade de palavras de instrução
+
+## Observabilidade
+
+O sistema oferece observabilidade completa através do Langfuse:
+
+- **Traces de Extração**: Cada documento processado gera traces detalhados
+- **Métricas de Qualidade**: Scores de confiança e cobertura de metadados
+- **Performance de Retrieval**: Efetividade dos filtros e relevância
+- **Estatísticas de Uso**: Distribuição por perfil e tipo de consulta
+
+## Contribuição
+
+1. Fork o repositório
+2. Crie uma branch para sua feature
+3. Execute os testes: `uv run pytest`
+4. Execute o linting: `uvx ruff check src/ && uvx ruff format src/`
+5. Submita um Pull Request
+
+## Licença
+
+Este projeto está licenciado sob a MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.

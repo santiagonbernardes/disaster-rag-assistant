@@ -30,15 +30,22 @@ class TestDocumentIntegration:
         return LLMMetadataResponse(
             document_type="guide",
             information_type="preparation",
-            target_audience=["resident"],
+            disaster_category="flood",
+            target_audience="resident",
             area_type="urban",
             disaster_phase="before"
         )
 
+    @patch('src.services.metadata_extractor.langfuse_context')
     def test_document_with_metadata_extraction(
-        self, mock_llm_client, mock_llama_parse, mock_cache, sample_llm_response
+        self, mock_langfuse_context, mock_llm_client, mock_llama_parse, mock_cache, sample_llm_response
     ):
         """Test document processing with metadata extraction."""
+        # Mock Langfuse prompt
+        mock_prompt = Mock()
+        mock_prompt.config = {"model": "gpt-3.5-turbo", "temperature": 0.1}
+        mock_prompt.compile.return_value = "Test prompt"
+        mock_langfuse_context.client_instance.get_prompt.return_value = mock_prompt
         # Setup mocks
         mock_cache.load_chunks.return_value = None
         mock_cache.load_parsed.return_value = None
@@ -61,7 +68,9 @@ class TestDocumentIntegration:
         # Mock LLM metadata extraction
         mock_llm_response = Mock()
         mock_llm_response.output_parsed = sample_llm_response
-        mock_llm_client.responses.create.return_value = mock_llm_response
+        mock_llm_response.model = "gpt-3.5-turbo"
+        mock_llm_response.usage = {"total_tokens": 100}
+        mock_llm_client.responses.parse.return_value = mock_llm_response
         
         # Create document instance
         document = Document(
@@ -84,7 +93,7 @@ class TestDocumentIntegration:
         assert "document_type" in first_chunk.metadata
         assert "information_type" in first_chunk.metadata
         assert "target_audience" in first_chunk.metadata
-        assert "disaster_categories" in first_chunk.metadata
+        assert "disaster_category" in first_chunk.metadata
         assert "urgency_level" in first_chunk.metadata
         assert "confidence_score" in first_chunk.metadata
         
@@ -92,7 +101,7 @@ class TestDocumentIntegration:
         assert "section_type" in first_chunk.metadata or "has_instructions" in first_chunk.metadata
         
         # Verify LLM was called for metadata extraction
-        mock_llm_client.responses.create.assert_called_once()
+        mock_llm_client.responses.parse.assert_called_once()
         
         # Verify cache was called to save chunks
         mock_cache.save_chunks.assert_called_once()
@@ -145,10 +154,16 @@ class TestDocumentIntegration:
         # Verify LLM was not called (using cache)
         mock_llm_client.responses.create.assert_not_called()
 
+    @patch('src.services.metadata_extractor.langfuse_context')
     def test_metadata_validation_warning(
-        self, mock_llm_client, mock_llama_parse, mock_cache, capfd
+        self, mock_langfuse_context, mock_llm_client, mock_llama_parse, mock_cache, capfd
     ):
         """Test that invalid metadata triggers a warning."""
+        # Mock Langfuse prompt
+        mock_prompt = Mock()
+        mock_prompt.config = {"model": "gpt-3.5-turbo", "temperature": 0.1}
+        mock_prompt.compile.return_value = "Test prompt"
+        mock_langfuse_context.client_instance.get_prompt.return_value = mock_prompt
         # Setup mocks for fresh processing
         mock_cache.load_chunks.return_value = None
         mock_cache.load_parsed.return_value = None
@@ -173,13 +188,16 @@ class TestDocumentIntegration:
         invalid_response = LLMMetadataResponse(
             document_type="guide",
             information_type="response",  # Invalid: response type with "before" phase
-            target_audience=["victim"],
+            disaster_category="flood",
+            target_audience="victim",
             area_type="urban",
             disaster_phase="before"  # Invalid: inconsistent with response type
         )
         mock_llm_response = Mock()
         mock_llm_response.output_parsed = invalid_response
-        mock_llm_client.responses.create.return_value = mock_llm_response
+        mock_llm_response.model = "gpt-3.5-turbo"
+        mock_llm_response.usage = {"total_tokens": 100}
+        mock_llm_client.responses.parse.return_value = mock_llm_response
         
         # Create document instance
         document = Document(

@@ -23,7 +23,7 @@ class TestChatbotFiltering:
         or_conditions = filter_dict["$or"]
         assert {"information_type": "response"} in or_conditions
         assert {"urgency_level": {"$in": ["critical", "high"]}} in or_conditions
-        assert {"target_audience": {"$in": ["victim"]}} in or_conditions
+        assert {"target_audience": "victim"} in or_conditions
 
     def test_get_profile_based_filter_resident(self):
         """Test metadata filter for resident profile."""

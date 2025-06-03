@@ -84,18 +84,28 @@ class TestMetadataExtractor:
         assert result["has_instructions"] is True
         assert result["instruction_density"] > 0
     
-    def test_llm_extraction_success(self, extractor, mock_llm_client):
+    @patch('src.services.metadata_extractor.langfuse_context')
+    def test_llm_extraction_success(self, mock_langfuse_context, extractor, mock_llm_client):
         """Test successful LLM metadata extraction."""
+        # Mock Langfuse prompt
+        mock_prompt = Mock()
+        mock_prompt.config = {"model": "gpt-3.5-turbo", "temperature": 0.1}
+        mock_prompt.compile.return_value = "Test prompt"
+        mock_langfuse_context.client_instance.get_prompt.return_value = mock_prompt
+        
         # Mock LLM response
         mock_response = Mock()
         mock_response.output_parsed = LLMMetadataResponse(
             document_type="manual",
-            information_type="response", 
-            target_audience=["victim"],
+            information_type="response",
+            disaster_category="flood",
+            target_audience="victim",
             area_type="urban",
             disaster_phase="during"
         )
-        mock_llm_client.responses.create.return_value = mock_response
+        mock_response.model = "gpt-3.5-turbo"
+        mock_response.usage = {"total_tokens": 100}
+        mock_llm_client.responses.parse.return_value = mock_response
         
         content = "Manual de evacuação para enchentes em área urbana."
         
@@ -104,7 +114,7 @@ class TestMetadataExtractor:
         assert isinstance(result, LLMMetadataResponse)
         assert result.document_type == "manual"
         assert result.information_type == "response"
-        assert "victim" in result.target_audience
+        assert result.target_audience == "victim"
         assert result.area_type == "urban"
         assert result.disaster_phase == "during"
     
@@ -147,7 +157,8 @@ class TestMetadataExtractor:
         mock_response.output_parsed = LLMMetadataResponse(
             document_type="guide",
             information_type="preparation",
-            target_audience=["resident"],
+            disaster_category="flood",
+            target_audience="resident",
             area_type="general",
             disaster_phase="before"
         )
@@ -161,10 +172,10 @@ class TestMetadataExtractor:
         assert isinstance(result, DocumentMetadata)
         assert result.document_type == "guide"
         assert result.information_type == "preparation"
-        assert "resident" in result.target_audience
+        assert result.target_audience == "resident"
         assert result.source_authority == "defesa_civil"
         assert result.authority_level == "federal"
-        assert "flood" in result.disaster_categories
+        assert result.disaster_category == "flood"
         assert result.urgency_level == "medium"
         assert result.confidence_score > 0
         assert result.extraction_timestamp is not None
@@ -173,9 +184,9 @@ class TestMetadataExtractor:
         """Test DocumentMetadata to_dict conversion."""
         metadata = DocumentMetadata(
             document_type="manual",
-            disaster_categories=["flood"],
+            disaster_category="flood",
             information_type="response",
-            target_audience=["victim"],
+            target_audience="victim",
             urgency_level="high",
             disaster_phase="during",
             source_authority="defesa_civil",
@@ -186,7 +197,7 @@ class TestMetadataExtractor:
         result = metadata.to_dict()
         
         assert result["document_type"] == "manual"
-        assert result["disaster_categories"] == ["flood"]
+        assert result["disaster_category"] == "flood"
         assert result["confidence_score"] == 0.85
         assert "extraction_timestamp" in result
 
@@ -194,9 +205,9 @@ class TestMetadataExtractor:
         """Test metadata validation with valid metadata."""
         metadata = DocumentMetadata(
             document_type="guide",
-            disaster_categories=["flood"],
+            disaster_category="flood",
             information_type="preparation",
-            target_audience=["resident"],
+            target_audience="resident",
             urgency_level="medium",
             disaster_phase="before",
             confidence_score=0.8,
@@ -210,9 +221,9 @@ class TestMetadataExtractor:
         # Invalid: response type with before phase
         metadata = DocumentMetadata(
             document_type="guide",
-            disaster_categories=["flood"],
+            disaster_category="flood",
             information_type="response",
-            target_audience=["victim"],
+            target_audience="victim",
             urgency_level="high",
             disaster_phase="before",  # Inconsistent with response type
             confidence_score=0.8,
@@ -225,10 +236,10 @@ class TestMetadataExtractor:
         """Test metadata validation with high urgency but no disaster categories."""
         metadata = DocumentMetadata(
             document_type="guide",
-            disaster_categories=[],  # Invalid: empty with high urgency
+            disaster_category="general",  # Invalid: general with high urgency
             information_type="response",
-            target_audience=["victim"],
-            urgency_level="critical",  # High urgency requires categories
+            target_audience="victim",
+            urgency_level="critical",  # High urgency requires specific category
             disaster_phase="during",
             confidence_score=0.8,
             extraction_timestamp="2024-01-01T00:00:00"

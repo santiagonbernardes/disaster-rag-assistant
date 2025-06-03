@@ -56,8 +56,12 @@ class TestDocumentWithCache:
         assert not temp_cache.has_original(url)
         doc.markdown()
 
-        # Verify download happened
-        mock_get.assert_called_once_with(url)
+        # Verify download happened with headers
+        mock_get.assert_called_once()
+        call_args = mock_get.call_args
+        assert call_args[0][0] == url
+        assert "headers" in call_args[1]
+        assert "timeout" in call_args[1]
 
         # Verify content was cached
         assert temp_cache.has_original(url)

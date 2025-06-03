@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from langfuse.decorators import observe
+from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import OpenAI
 from pydantic import BaseModel, Field
 
@@ -332,7 +332,7 @@ class MetadataExtractor:
         
         return metadata
     
-    @observe(name="llm_metadata_extraction")
+    @observe(as_type="generation", name="llm_metadata_extraction")
     def _extract_with_llm(self, content: str) -> LLMMetadataResponse | None:
         """Extract metadata using LLM classification with structured outputs."""
         try:
@@ -342,43 +342,30 @@ class MetadataExtractor:
                 content[:max_length] if len(content) > max_length else content
             )
             
-            # System prompt - role and context
-            system_prompt = """
-            Você é um especialista em classificação de documentos de resposta a desastres naturais brasileiros.
+            # Get prompt from Langfuse
+            prompt = langfuse_context.client_instance.get_prompt("metadata_extractor")
+
             
-            Sua tarefa é extrair metadados estruturados de documentos, considerando:
-            - Categoria PRINCIPAL do desastre (apenas uma)
-            - Público-alvo PRIMÁRIO (apenas um)
-            - Tipo de informação e contexto do documento
-            
-            EXEMPLO DE ANÁLISE:
-            
-            Documento: "Kit de emergência pessoal para enchentes - orientações para famílias"
-            
-            Raciocínio:
-            - Tipo: "guide" (orientações gerais, não manual técnico)
-            - Categoria: "flood" (enchentes mencionadas especificamente)  
-            - Informação: "preparation" (kit de emergência é preparação prévia)
-            - Audiência: "family" (famílias mencionadas diretamente)
-            - Área: "general" (não especifica urbano/rural)
-            - Fase: "before" (preparação prévia ao evento)
-            
-            Analise cada documento seguindo esse mesmo processo de raciocínio estruturado.
-            """
-            
-            # User prompt - specific document
-            user_prompt = f"Analise este documento e extraia os metadados estruturados:\n\n{truncated_content}"
+            # Compile the prompt with the document content
+            compiled_prompt = prompt.compile(document_content=truncated_content)
             
             response = self.llm_client.responses.parse(
                 model="gpt-4o-mini",
-                input=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                text_format=LLMMetadataResponse
+                input=compiled_prompt,
+                text_format=LLMMetadataResponse,
             )
 
-            return response.output_parsed
+            output = response.output_parsed
+
+            langfuse_context.update_current_observation(
+                prompt=prompt,
+                input=compiled_prompt,
+                output=output,
+                model=response.model,
+                usage_details=response.usage
+            )
+
+            return output
                 
         except Exception as e:
             print(f"LLM extraction failed: {e}")

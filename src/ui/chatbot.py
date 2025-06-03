@@ -141,8 +141,6 @@ def prompt_user_for_profile():
                 st.session_state.user_profile = select_box
 
 
-
-
 @observe(name="document_retrieval_with_metadata")
 def get_retrieved_documents(user_prompt):
     # Get user profile-based metadata filter
@@ -318,8 +316,6 @@ def get_relevant_documents(documents):
     return relevant_docs
 
 
-
-
 @observe
 def get_streaming_response(user_prompt):
     """Nova função para streaming response com observabilidade Langfuse."""
@@ -374,19 +370,25 @@ def get_streaming_response(user_prompt):
 
 @st.fragment
 def render_chat():
-    # Renderizar histórico local (limpo) ao invés do histórico Langfuse
+    # Renderizar histórico local limpo
     render_local_chat_history()
 
     if prompt := st.chat_input("Digite sua mensagem..."):
-        # Adicionar mensagem do usuário ao histórico local
+        # Adicionar mensagem do usuário ao histórico
         add_message_to_history(role="user", content=prompt)
 
         # Mostrar mensagem do usuário
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Mostrar resposta streaming do assistente
+        # Mostrar resposta streaming com feedback visual
         with st.chat_message("assistant"):
+            with st.spinner("🤔 Analisando documentos..."):
+                # Breve delay para mostrar feedback de processamento
+                import time
+                time.sleep(0.3)
+            
+            # Stream da resposta
             st.write_stream(get_streaming_response(prompt))
 
         st.rerun(scope="fragment")
@@ -398,6 +400,20 @@ def main():
     if "user_profile" not in st.session_state:
         prompt_user_for_profile()
         return
+
+    # Header com informações da sessão
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        profile_label = PROFILE_OPTIONS[st.session_state.user_profile]["label"]
+        st.markdown(f"**Perfil:** {profile_label}")
+    
+    with col2:
+        # Botão para limpar histórico
+        if st.button("🗑️ Limpar chat", type="secondary"):
+            clear_chat_history()
+            st.rerun()
+
+    st.divider()
 
     # Inicialização do session state (simplificado)
     if "session_id" not in st.session_state:

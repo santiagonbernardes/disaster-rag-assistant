@@ -336,3 +336,48 @@ class MetadataExtractor:
             confidence += 0.1
         
         return min(confidence, 1.0)
+    
+    def validate_metadata(self, metadata: DocumentMetadata) -> bool:
+        """
+        Validate extracted metadata for consistency and completeness.
+        
+        Args:
+            metadata: DocumentMetadata object to validate
+            
+        Returns:
+            True if metadata is valid, False otherwise
+        """
+        # Required fields must be present and valid
+        if not metadata.document_type:
+            return False
+        if not metadata.information_type:
+            return False
+        if not metadata.target_audience:
+            return False
+        if not metadata.urgency_level:
+            return False
+        if not metadata.disaster_phase:
+            return False
+        
+        # Confidence score should be reasonable
+        if metadata.confidence_score < 0 or metadata.confidence_score > 1:
+            return False
+        
+        # Disaster categories should not be empty if we have high urgency
+        if (
+            metadata.urgency_level in ["critical", "high"]
+            and not metadata.disaster_categories
+        ):
+            return False
+        
+        # Consistency checks
+        if (
+            metadata.information_type == "response"
+            and metadata.disaster_phase == "before"
+        ):
+            return False
+        
+        return not (
+            metadata.information_type == "prevention"
+            and metadata.disaster_phase == "during"
+        )

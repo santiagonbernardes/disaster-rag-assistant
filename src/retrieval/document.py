@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from src.repositories.document_cache import DocumentCache
 from src.services.document_chunker import Chunk, DocumentChunker
+from src.services.metadata_extractor import MetadataExtractor
 
 
 class DocumentOutput(BaseModel):
@@ -29,6 +30,7 @@ class Document:
         llama_parse: LlamaParse,
         cache: DocumentCache | None = None,
         chunker: DocumentChunker | None = None,
+        metadata_extractor: MetadataExtractor | None = None,
     ):
         self._url: str = url
         self._llm_client: OpenAI = client
@@ -36,6 +38,7 @@ class Document:
         self._llama_parse: LlamaParse = llama_parse
         self._cache = cache or DocumentCache()
         self._chunker = chunker or DocumentChunker()
+        self._metadata_extractor = metadata_extractor or MetadataExtractor(client)
 
     def markdown(self) -> str:
         if not self._document_output:
@@ -124,15 +127,33 @@ class Document:
 
     def _generate_chunks(self, content: str) -> list[Chunk]:
         """Generate chunks from parsed content and save to cache."""
-        # Prepare metadata for chunks
-        metadata = {
+        # Extract document-level metadata
+        document_metadata = self._metadata_extractor.extract_document_metadata(
+            content, self._url
+        )
+        
+        # Validate metadata
+        if not self._metadata_extractor.validate_metadata(document_metadata):
+            print(f"Warning: Invalid metadata extracted for {self._url}")
+        
+        # Prepare base metadata for chunks
+        base_metadata = {
             "url": self._url,
             "url_hash": self._cache.get_document_hash(self._url),
             "chunked_at": datetime.now().isoformat(),
+            # Include document-level metadata
+            **document_metadata.to_dict(),
         }
 
-        # Generate chunks
-        chunks = self._chunker.chunk_document(content, metadata)
+        # Generate chunks with base metadata
+        chunks = self._chunker.chunk_document(content, base_metadata)
+        
+        # Enrich each chunk with specific metadata
+        for chunk in chunks:
+            chunk_metadata = self._metadata_extractor.extract_chunk_metadata(
+                chunk.content
+            )
+            chunk.metadata.update(chunk_metadata)
 
         # Save chunks to cache
         self._cache.save_chunks(self._url, chunks)

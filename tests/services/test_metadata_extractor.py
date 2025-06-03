@@ -189,3 +189,49 @@ class TestMetadataExtractor:
         assert result["disaster_categories"] == ["flood"]
         assert result["confidence_score"] == 0.85
         assert "extraction_timestamp" in result
+
+    def test_metadata_validation_valid(self, extractor):
+        """Test metadata validation with valid metadata."""
+        metadata = DocumentMetadata(
+            document_type="guide",
+            disaster_categories=["flood"],
+            information_type="preparation",
+            target_audience=["resident"],
+            urgency_level="medium",
+            disaster_phase="before",
+            confidence_score=0.8,
+            extraction_timestamp="2024-01-01T00:00:00"
+        )
+        
+        assert extractor.validate_metadata(metadata) is True
+    
+    def test_metadata_validation_invalid_consistency(self, extractor):
+        """Test metadata validation with invalid consistency."""
+        # Invalid: response type with before phase
+        metadata = DocumentMetadata(
+            document_type="guide",
+            disaster_categories=["flood"],
+            information_type="response",
+            target_audience=["victim"],
+            urgency_level="high",
+            disaster_phase="before",  # Inconsistent with response type
+            confidence_score=0.8,
+            extraction_timestamp="2024-01-01T00:00:00"
+        )
+        
+        assert extractor.validate_metadata(metadata) is False
+    
+    def test_metadata_validation_invalid_urgency_no_categories(self, extractor):
+        """Test metadata validation with high urgency but no disaster categories."""
+        metadata = DocumentMetadata(
+            document_type="guide",
+            disaster_categories=[],  # Invalid: empty with high urgency
+            information_type="response",
+            target_audience=["victim"],
+            urgency_level="critical",  # High urgency requires categories
+            disaster_phase="during",
+            confidence_score=0.8,
+            extraction_timestamp="2024-01-01T00:00:00"
+        )
+        
+        assert extractor.validate_metadata(metadata) is False

@@ -89,8 +89,21 @@ class Document:
         content_bytes = self._cache.load_original(self._url)
 
         if content_bytes is None:
-            # Download if not in cache
-            response = requests.get(self._url)
+            # Download if not in cache with proper headers and timeout
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/pdf,application/octet-stream,*/*',
+                'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection': 'keep-alive',
+            }
+            
+            response = requests.get(
+                self._url, 
+                headers=headers,
+                timeout=(10, 60),  # 10s connect, 60s read timeout
+                stream=True  # Stream large files
+            )
             response.raise_for_status()
             content_bytes = response.content
 

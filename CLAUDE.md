@@ -8,15 +8,18 @@ Disaster RAG Assistant is an intelligent virtual assistant using RAG (Retrieval-
 
 ## Current Project Status
 
-The project has completed implementation of a comprehensive metadata extraction system for intelligent document retrieval. Key features include:
+The project has completed a comprehensive chatbot refactoring with streaming responses and optimized memory management. Key features include:
 
+- **Streaming Chat Interface**: Real-time responses with typing effect using st.write_stream
+- **Local Memory Management**: Efficient session-based chat history (max 50 messages, context window 10)
+- **Intelligent Filename Extraction**: Content-Disposition header support with path-based naming for HTML pages
 - **Metadata Extraction System**: Automatic extraction of structured metadata using deterministic rules and LLM classification
 - **Document Cache Infrastructure**: File-based caching system for original documents, parsed content, and enriched chunks
-- **UI Integration**: Settings interface with progress tracking and metadata quality validation
+- **UI Integration**: Clean interface with profile display, message counter, and clear chat functionality
 - **Intelligent Retrieval**: Profile-based filtering using extracted metadata (victim, resident, family)
 - **ChromaDB Integration**: Metadata-enriched indexing with duplicate checking and cache synchronization
-- **Langfuse Observability**: Comprehensive tracing of metadata extraction and retrieval processes
-- **Enhanced UI**: Progress bars, detailed logging, cache statistics, and metadata validation warnings
+- **Langfuse Observability**: Enhanced tracing with streaming support and local history metadata
+- **Performance Optimization**: Memory-efficient rendering and automatic cleanup of old messages
 
 ## Architecture
 
@@ -28,10 +31,13 @@ The application uses:
 - **Langfuse** for observability and prompt management
 
 Key architectural decisions:
-- **Enhanced RAG pattern**: Retrieves relevant documents from ChromaDB using semantic search + metadata filtering, then augments LLM responses with contextually relevant content
+- **Streaming RAG Architecture**: Real-time response generation with st.write_stream for enhanced user experience
+- **Local Memory Management**: Session-based chat history with automatic cleanup and configurable limits
+- **Enhanced RAG Pattern**: Retrieves relevant documents from ChromaDB using semantic search + metadata filtering, then augments LLM responses with contextually relevant content
 - **Intelligent Profiling**: User profiles (victim/resident/family) determine both prompt templates from Langfuse and automatic metadata filtering for document retrieval
 - **Metadata-Enhanced Indexing**: Documents are indexed with embeddings + structured metadata (document type, disaster category, urgency level, target audience, etc.)
 - **Multi-Stage Filtering**: Similarity threshold of 1.3 combined with profile-based metadata filters for improved precision
+- **Clean User Interface**: System prompts and RAG context hidden from users, showing only clean conversation flow
 
 ## Development Commands
 

@@ -119,13 +119,14 @@ class TestDocumentWithCache:
             assert content == "# Test Document\n\nThis is test content."
 
     def test_filename_extraction(self, mock_openai, mock_llama_parse, temp_cache):
-        """Test filename extraction from URL."""
-        # Test various URL patterns
+        """Test filename extraction from URL with enhanced logic."""
+        # Test various URL patterns with updated expectations
         test_cases = [
             ("https://example.com/document.pdf", "document.pdf"),
             ("https://example.com/path/to/file.docx", "file.docx"),
-            ("https://example.com/no-extension", "document"),
-            ("https://example.com/", "document"),
+            ("https://example.com/no-extension", "no-extension.html"),  # Path segment becomes filename
+            ("https://example.com/", "example.html"),  # Domain becomes filename
+            ("https://spsemprealerta.sp.gov.br/orientacoes/tempestades/", "tempestades.html"),
         ]
 
         for url, expected_filename in test_cases:

@@ -263,14 +263,12 @@ def get_an_response(user_prompt):
 
     retrieved_docs = get_retrieved_documents(user_prompt)
 
-    instruction = prompt_client.compile(retrieved_documents=retrieved_docs)[0][
-        "content"
-    ]
+    compiled_prompt = prompt_client.compile(context=retrieved_docs, question=user_prompt)
 
     return client().responses.create(
-        model="gpt-4.1-nano",
-        input=user_prompt,
-        instructions=instruction,
+        model=prompt_client.config["model"],
+        temperature=prompt_client.config["temperature"],
+        input=compiled_prompt,
         previous_response_id=st.session_state.previous_response_id,
         langfuse_prompt=prompt_client,
     )

@@ -347,10 +347,11 @@ class MetadataExtractor:
 
             
             # Compile the prompt with the document content
-            compiled_prompt = prompt.compile(document_content=truncated_content)
+            compiled_prompt = prompt.compile(content=truncated_content)
             
             response = self.llm_client.responses.parse(
-                model="gpt-4o-mini",
+                model=prompt.config["model"],
+                temperature=prompt.config["temperature"],
                 input=compiled_prompt,
                 text_format=LLMMetadataResponse,
             )

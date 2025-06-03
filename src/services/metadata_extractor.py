@@ -25,11 +25,17 @@ class LLMMetadataResponse(BaseModel):
             "emergências, resposta durante o evento ou recuperação pós-desastre"
         )
     )
-    target_audience: list[
-        Literal["victim", "resident", "family", "authority"]
+    disaster_category: Literal[
+        "flood", "earthquake", "fire", "landslide", "drought", "storm", "general"
     ] = Field(
         description=(
-            "Público-alvo do documento: vítimas diretas, residentes da área, "
+            "Categoria principal do desastre: enchente, terremoto, incêndio, "
+            "deslizamento, seca, tempestade ou aplicação geral"
+        )
+    )
+    target_audience: Literal["victim", "resident", "family", "authority"] = Field(
+        description=(
+            "Público-alvo principal do documento: vítimas diretas, residentes da área, "
             "familiares de afetados ou autoridades responsáveis"
         )
     )
@@ -52,9 +58,9 @@ class DocumentMetadata:
     
     # Content classification
     document_type: str  # manual, guide, regulation, report, news
-    disaster_categories: list[str]  # flood, earthquake, fire, landslide, drought
+    disaster_category: str  # flood, earthquake, fire, landslide, drought (primary category)
     information_type: str  # prevention, preparation, response, recovery
-    target_audience: list[str]  # victim, resident, family, authority
+    target_audience: str  # victim, resident, family, authority (primary audience)
     urgency_level: str  # critical, high, medium, low
     disaster_phase: str  # before, during, after, general
     
@@ -80,7 +86,7 @@ class DocumentMetadata:
         """Convert to dictionary for storage."""
         return {
             "document_type": self.document_type,
-            "disaster_categories": self.disaster_categories,
+            "disaster_category": self.disaster_category,
             "information_type": self.information_type,
             "target_audience": self.target_audience,
             "urgency_level": self.urgency_level,
@@ -193,9 +199,9 @@ class MetadataExtractor:
         # Create metadata object
         metadata = DocumentMetadata(
             document_type=merged_data.get("document_type", "guide"),
-            disaster_categories=merged_data.get("disaster_categories", []),
+            disaster_category=self._get_primary_value(merged_data.get("disaster_categories", []), "general"),
             information_type=merged_data.get("information_type", "preparation"),
-            target_audience=merged_data.get("target_audience", ["resident"]),
+            target_audience=merged_data.get("target_audience", "resident"),
             urgency_level=merged_data.get("urgency_level", "medium"),
             disaster_phase=merged_data.get("disaster_phase", "general"),
             region=merged_data.get("region"),
@@ -211,6 +217,28 @@ class MetadataExtractor:
         )
         
         return metadata
+    
+    def _get_primary_value(self, values: list, default: str) -> str:
+        """Extract the primary (first/most relevant) value from a list."""
+        if not values or not isinstance(values, list):
+            return default
+        
+        # Priority order for disaster categories
+        if default == "general":  # This indicates disaster_category
+            priority_order = ["flood", "earthquake", "fire", "landslide", "storm", "drought"]
+            for priority in priority_order:
+                if priority in values:
+                    return priority
+        
+        # Priority order for target audience
+        if default == "resident":  # This indicates target_audience
+            priority_order = ["victim", "resident", "family", "authority"]
+            for priority in priority_order:
+                if priority in values:
+                    return priority
+        
+        # Default: return first value or default
+        return values[0] if values else default
     
     @observe(name="chunk_metadata_extraction")
     def extract_chunk_metadata(self, chunk_content: str) -> dict:
@@ -275,13 +303,13 @@ class MetadataExtractor:
                 metadata.update(data)
                 break
         
-        # Extract disaster categories
+        # Extract primary disaster category
         content_lower = content.lower()
         detected_disasters = []
         for disaster, keywords in self.disaster_keywords.items():
             if any(keyword in content_lower for keyword in keywords):
                 detected_disasters.append(disaster)
-        metadata["disaster_categories"] = detected_disasters
+        metadata["disaster_categories"] = detected_disasters  # Keep for LLM processing
         
         # Extract urgency level
         for level, keywords in self.urgency_keywords.items():
@@ -384,10 +412,10 @@ class MetadataExtractor:
         if metadata.confidence_score < 0 or metadata.confidence_score > 1:
             return False
         
-        # Disaster categories should not be empty if we have high urgency
+        # Disaster category should not be general if we have high urgency
         if (
             metadata.urgency_level in ["critical", "high"]
-            and not metadata.disaster_categories
+            and metadata.disaster_category == "general"
         ):
             return False
         

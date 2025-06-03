@@ -146,7 +146,7 @@ def get_profile_based_filter():
             "$or": [
                 {"information_type": "response"},
                 {"urgency_level": {"$in": ["critical", "high"]}},
-                {"target_audience": {"$in": ["victim"]}},
+                {"target_audience": "victim"},
             ]
         },
         "resident": {

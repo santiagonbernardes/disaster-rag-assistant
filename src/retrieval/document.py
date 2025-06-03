@@ -186,10 +186,11 @@ class Document:
         url_path = urlparse(response.url).path
         if url_path and "." in url_path:
             return os.path.basename(url_path)
+        return "document.html"
 
     @classmethod
     def _get_file_name_from_url(cls, url: str):
         url_path = urlparse(url).path
         if url_path and "." in url_path:
             return os.path.basename(url_path)
-        return "document"
+        return "document.html"

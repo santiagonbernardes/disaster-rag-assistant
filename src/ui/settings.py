@@ -96,11 +96,11 @@ with st.form("settings_form", border=True):
                 start_time = time.time()
 
                 def update_progress(step: int, message: str):
-                    progress = min(step / total_steps, 1.0)  # Ensure progress never exceeds 1.0
+                    progress = min(
+                        step / total_steps, 1.0
+                    )  # Ensure progress never exceeds 1.0
                     progress_bar.progress(progress, text=message)
-                    status_text.text(
-                        f"Step {step}/{total_steps}: {message}"
-                    )
+                    status_text.text(f"Step {step}/{total_steps}: {message}")
                     add_log(message, "info")
 
                 try:
@@ -108,7 +108,7 @@ with st.form("settings_form", border=True):
                     document = Document(
                         url,
                         client=OpenAI(api_key=st.secrets["openai_api_key"]),
-                            llama_parse=LlamaParse(
+                        llama_parse=LlamaParse(
                             api_key=st.secrets["llama_cloud_api_key"], language="pt"
                         ),
                         cache=cache,
@@ -134,9 +134,7 @@ with st.form("settings_form", border=True):
                     if chunks:
                         add_log(f"Generated {len(chunks)} chunks", "success")
                     else:
-                        add_log(
-                            "No chunks generated, using full document", "warning"
-                        )
+                        add_log("No chunks generated, using full document", "warning")
 
                     # Step 4: Index in ChromaDB
                     update_progress(4, "Indexing in ChromaDB...")
@@ -160,12 +158,15 @@ with st.form("settings_form", border=True):
                                 "end_char": chunk.end_char,
                                 # Include all extracted metadata
                                 **{
-                                    k: v for k, v in chunk.metadata.items() 
-                                    if (k not in ["chunk_index", "total_chunks"] 
-                                        and v is not None)
-                                }
+                                    k: v
+                                    for k, v in chunk.metadata.items()
+                                    if (
+                                        k not in ["chunk_index", "total_chunks"]
+                                        and v is not None
+                                    )
+                                },
                             }
-                            
+
                             # Validate metadata quality
                             if "confidence_score" in chunk_metadata:
                                 confidence = chunk_metadata["confidence_score"]
@@ -175,7 +176,7 @@ with st.form("settings_form", border=True):
                                         f"(chunk {chunk.index}): {confidence:.2f}"
                                     )
                                     add_log(msg, "warning")
-                            
+
                             metadatas.append(chunk_metadata)
                             # Create unique ID for each chunk
                             ids.append(f"{url}#chunk_{chunk.index}")
@@ -186,9 +187,7 @@ with st.form("settings_form", border=True):
                             metadatas=metadatas,
                             ids=ids,
                         )
-                        add_log(
-                            f"Indexed {len(chunks)} chunks in ChromaDB", "success"
-                        )
+                        add_log(f"Indexed {len(chunks)} chunks in ChromaDB", "success")
                     else:
                         # Fallback to full document if no chunks
                         collection.add(
@@ -198,7 +197,7 @@ with st.form("settings_form", border=True):
                         )
                         add_log("Indexed full document in ChromaDB", "success")
 
-                    # Complete progress  
+                    # Complete progress
                     update_progress(4, "Processing complete!")
 
                     # Calculate processing time

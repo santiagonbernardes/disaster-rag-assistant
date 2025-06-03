@@ -10,44 +10,44 @@ from pydantic import BaseModel, Field
 
 class LLMMetadataResponse(BaseModel):
     """Structured output for LLM metadata extraction."""
-    
+
     document_type: Literal["manual", "guide", "regulation", "report", "news"] = Field(
         description=(
-            "Tipo do documento: manual de instruções, guia orientativo, "
-            "regulamentação oficial, relatório técnico ou notícia"
+            "Document type: instruction manual, guidance guide, "
+            "official regulation, technical report or news article"
         )
     )
-    information_type: Literal[
-        "prevention", "preparation", "response", "recovery"
-    ] = Field(
-        description=(
-            "Tipo de informação: prevenção de desastres, preparação para "
-            "emergências, resposta durante o evento ou recuperação pós-desastre"
+    information_type: Literal["prevention", "preparation", "response", "recovery"] = (
+        Field(
+            description=(
+                "Information type: disaster prevention, emergency preparation, "
+                "response during the event or post-disaster recovery"
+            )
         )
     )
     disaster_category: Literal[
         "flood", "earthquake", "fire", "landslide", "drought", "storm", "general"
     ] = Field(
         description=(
-            "Categoria principal do desastre: enchente, terremoto, incêndio, "
-            "deslizamento, seca, tempestade ou aplicação geral"
+            "Main disaster category: flood, earthquake, fire, "
+            "landslide, drought, storm or general application"
         )
     )
     target_audience: Literal["victim", "resident", "family", "authority"] = Field(
         description=(
-            "Público-alvo principal do documento: vítimas diretas, residentes da área, "
-            "familiares de afetados ou autoridades responsáveis"
+            "Main target audience: direct victims, area residents, "
+            "family members of affected people or responsible authorities"
         )
     )
     area_type: Literal["urban", "rural", "coastal", "general"] = Field(
         description=(
-            "Tipo de área geográfica: urbana, rural, costeira ou aplicação geral"
+            "Geographic area type: urban, rural, coastal or general application"
         )
     )
     disaster_phase: Literal["before", "during", "after", "general"] = Field(
         description=(
-            "Fase do desastre abordada: antes do evento, durante a ocorrência, "
-            "após o impacto ou orientação geral"
+            "Disaster phase addressed: before the event, during occurrence, "
+            "after impact or general guidance"
         )
     )
 
@@ -55,33 +55,35 @@ class LLMMetadataResponse(BaseModel):
 @dataclass
 class DocumentMetadata:
     """Structured metadata for disaster response documents."""
-    
+
     # Content classification
     document_type: str  # manual, guide, regulation, report, news
-    disaster_category: str  # flood, earthquake, fire, landslide, drought (primary category)
+    disaster_category: (
+        str  # flood, earthquake, fire, landslide, drought (primary category)
+    )
     information_type: str  # prevention, preparation, response, recovery
     target_audience: str  # victim, resident, family, authority (primary audience)
     urgency_level: str  # critical, high, medium, low
     disaster_phase: str  # before, during, after, general
-    
+
     # Geographic scope
     region: str | None = None
     state: str | None = None
     area_type: str | None = None  # urban, rural, coastal
-    
+
     # Source information
     source_authority: str | None = None  # defesa_civil, bombeiros, inpe
     authority_level: str | None = None  # federal, state, municipal
-    
+
     # Structural elements
     has_emergency_contacts: bool = False
     has_instructions: bool = False
     has_maps: bool = False
-    
+
     # Quality metrics
     confidence_score: float = 0.0
     extraction_timestamp: str = ""
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary for storage."""
         return {
@@ -106,16 +108,16 @@ class DocumentMetadata:
 
 class MetadataExtractor:
     """Service for extracting structured metadata from disaster response documents."""
-    
+
     def __init__(self, llm_client: OpenAI):
         """
         Initialize the MetadataExtractor.
-        
+
         Args:
             llm_client: OpenAI client for LLM-based extraction
         """
         self.llm_client = llm_client
-        
+
         # URL patterns for deterministic extraction
         self.url_patterns = {
             "defesacivil.gov.br": {
@@ -136,7 +138,7 @@ class MetadataExtractor:
             ".rj.gov.br": {"state": "rio_de_janeiro", "authority_level": "state"},
             ".mg.gov.br": {"state": "minas_gerais", "authority_level": "state"},
         }
-        
+
         # Disaster keyword patterns
         self.disaster_keywords = {
             "flood": ["enchente", "inundação", "alagamento", "cheia"],
@@ -146,7 +148,7 @@ class MetadataExtractor:
             "drought": ["seca", "estiagem", "falta de água"],
             "storm": ["tempestade", "vendaval", "tornado", "ciclone"],
         }
-        
+
         # Urgency indicators
         self.urgency_keywords = {
             "critical": ["imediato", "urgente", "evacuação", "perigo iminente"],
@@ -154,33 +156,33 @@ class MetadataExtractor:
             "medium": ["orientação", "prevenção", "preparação"],
             "low": ["informação", "conhecimento", "conscientização"],
         }
-    
+
     @observe(name="metadata_extraction")
     def extract_document_metadata(self, content: str, url: str) -> DocumentMetadata:
         """
         Extract comprehensive metadata from a document.
-        
+
         Args:
             content: The document text content
             url: The document URL
-            
+
         Returns:
             DocumentMetadata object with extracted information
         """
         # Start with deterministic extraction
         deterministic_data = self._extract_deterministic(content, url)
-        
+
         # Enhance with LLM-based extraction
         llm_data = self._extract_with_llm(content)
-        
+
         # Merge results with LLM taking priority for semantic fields
         merged_data = {**deterministic_data}
         if llm_data:
             merged_data.update(llm_data.model_dump())
-        
+
         # Calculate confidence score
         confidence = self._calculate_confidence(merged_data, content)
-        
+
         # Log extraction results for observability
         extraction_stats = {
             "url": url,
@@ -195,11 +197,13 @@ class MetadataExtractor:
             "has_instructions": merged_data.get("has_instructions", False),
         }
         print(f"Metadata extraction stats: {extraction_stats}")
-        
+
         # Create metadata object
         metadata = DocumentMetadata(
             document_type=merged_data.get("document_type", "guide"),
-            disaster_category=self._get_primary_value(merged_data.get("disaster_categories", []), "general"),
+            disaster_category=self._get_primary_value(
+                merged_data.get("disaster_categories", []), "general"
+            ),
             information_type=merged_data.get("information_type", "preparation"),
             target_audience=merged_data.get("target_audience", "resident"),
             urgency_level=merged_data.get("urgency_level", "medium"),
@@ -215,49 +219,55 @@ class MetadataExtractor:
             confidence_score=confidence,
             extraction_timestamp=datetime.now().isoformat(),
         )
-        
+
         return metadata
-    
+
     def _get_primary_value(self, values: list, default: str) -> str:
         """Extract the primary (first/most relevant) value from a list."""
         if not values or not isinstance(values, list):
             return default
-        
+
         # Priority order for disaster categories
         if default == "general":  # This indicates disaster_category
-            priority_order = ["flood", "earthquake", "fire", "landslide", "storm", "drought"]
+            priority_order = [
+                "flood",
+                "earthquake",
+                "fire",
+                "landslide",
+                "storm",
+                "drought",
+            ]
             for priority in priority_order:
                 if priority in values:
                     return priority
-        
+
         # Priority order for target audience
         if default == "resident":  # This indicates target_audience
             priority_order = ["victim", "resident", "family", "authority"]
             for priority in priority_order:
                 if priority in values:
                     return priority
-        
+
         # Default: return first value or default
         return values[0] if values else default
-    
+
     @observe(name="chunk_metadata_extraction")
     def extract_chunk_metadata(self, chunk_content: str) -> dict:
         """
         Extract chunk-specific metadata.
-        
+
         Args:
             chunk_content: The chunk text content
-            
+
         Returns:
             Dictionary with chunk-specific metadata
         """
         metadata = {}
-        
+
         # Detect section type
         chunk_lower = chunk_content.lower()
         if any(
-            word in chunk_lower
-            for word in ["introdução", "apresentação", "objetivo"]
+            word in chunk_lower for word in ["introdução", "apresentação", "objetivo"]
         ):
             metadata["section_type"] = "introduction"
         elif any(
@@ -269,18 +279,18 @@ class MetadataExtractor:
             metadata["section_type"] = "contacts"
         elif any(word in chunk_lower for word in ["mapa", "localização", "endereço"]):
             metadata["section_type"] = "maps"
-        
+
         # Detect emergency contacts
         emergency_patterns = [r"1\d{2}", r"\d{3}-\d{4}", r"\(\d{2}\)\s*\d{4,5}-\d{4}"]
         has_emergency_contacts = any(
             re.search(pattern, chunk_content) for pattern in emergency_patterns
         )
         metadata["has_emergency_contacts"] = has_emergency_contacts
-        
+
         # Detect step-by-step instructions
         has_instructions = bool(re.search(r"^\s*\d+\.", chunk_content, re.MULTILINE))
         metadata["has_instructions"] = has_instructions
-        
+
         # Calculate information density
         instruction_words = ["deve", "precisa", "faça", "siga", "evite", "não"]
         instruction_count = sum(
@@ -289,20 +299,20 @@ class MetadataExtractor:
         metadata["instruction_density"] = (
             instruction_count / len(chunk_content.split()) if chunk_content else 0
         )
-        
+
         return metadata
-    
+
     @observe(name="deterministic_extraction")
     def _extract_deterministic(self, content: str, url: str) -> dict:
         """Extract metadata using deterministic rules."""
         metadata = {}
-        
+
         # Extract from URL
         for pattern, data in self.url_patterns.items():
             if pattern in url.lower():
                 metadata.update(data)
                 break
-        
+
         # Extract primary disaster category
         content_lower = content.lower()
         detected_disasters = []
@@ -310,28 +320,28 @@ class MetadataExtractor:
             if any(keyword in content_lower for keyword in keywords):
                 detected_disasters.append(disaster)
         metadata["disaster_categories"] = detected_disasters  # Keep for LLM processing
-        
+
         # Extract urgency level
         for level, keywords in self.urgency_keywords.items():
             if any(keyword in content_lower for keyword in keywords):
                 metadata["urgency_level"] = level
                 break
-        
+
         # Detect structural elements
         emergency_patterns = [r"1\d{2}", r"\d{3}-\d{4}"]
         metadata["has_emergency_contacts"] = any(
             re.search(pattern, content) for pattern in emergency_patterns
         )
-        
+
         metadata["has_instructions"] = bool(
             re.search(r"^\s*\d+\.", content, re.MULTILINE)
         )
-        
+
         map_keywords = ["mapa", "localização", "endereço", "rua", "avenida"]
         metadata["has_maps"] = any(keyword in content_lower for keyword in map_keywords)
-        
+
         return metadata
-    
+
     @observe(as_type="generation", name="llm_metadata_extraction")
     def _extract_with_llm(self, content: str) -> LLMMetadataResponse | None:
         """Extract metadata using LLM classification with structured outputs."""
@@ -341,14 +351,13 @@ class MetadataExtractor:
             truncated_content = (
                 content[:max_length] if len(content) > max_length else content
             )
-            
+
             # Get prompt from Langfuse
             prompt = langfuse_context.client_instance.get_prompt("metadata_extractor")
 
-            
             # Compile the prompt with the document content
             compiled_prompt = prompt.compile(content=truncated_content)
-            
+
             response = self.llm_client.responses.parse(
                 model=prompt.config["model"],
                 temperature=prompt.config["temperature"],
@@ -363,19 +372,19 @@ class MetadataExtractor:
                 input=compiled_prompt,
                 output=output,
                 model=response.model,
-                usage_details=response.usage
+                usage_details=response.usage,
             )
 
             return output
-                
+
         except Exception as e:
             print(f"LLM extraction failed: {e}")
             return None
-    
+
     def _calculate_confidence(self, metadata: dict, content: str) -> float:
         """Calculate confidence score for extracted metadata."""
         confidence = 0.0
-        
+
         # Higher confidence if we have deterministic matches
         if metadata.get("source_authority"):
             confidence += 0.3
@@ -385,24 +394,24 @@ class MetadataExtractor:
             confidence += 0.2
         if metadata.get("has_instructions"):
             confidence += 0.1
-        
+
         # Higher confidence for longer documents
         word_count = len(content.split())
         if word_count > 500:
             confidence += 0.2
         elif word_count > 100:
             confidence += 0.1
-        
+
         return min(confidence, 1.0)
-    
+
     @observe(name="metadata_validation")
     def validate_metadata(self, metadata: DocumentMetadata) -> bool:
         """
         Validate extracted metadata for consistency and completeness.
-        
+
         Args:
             metadata: DocumentMetadata object to validate
-            
+
         Returns:
             True if metadata is valid, False otherwise
         """
@@ -417,25 +426,25 @@ class MetadataExtractor:
             return False
         if not metadata.disaster_phase:
             return False
-        
+
         # Confidence score should be reasonable
         if metadata.confidence_score < 0 or metadata.confidence_score > 1:
             return False
-        
+
         # Disaster category should not be general if we have high urgency
         if (
             metadata.urgency_level in ["critical", "high"]
             and metadata.disaster_category == "general"
         ):
             return False
-        
+
         # Consistency checks
         if (
             metadata.information_type == "response"
             and metadata.disaster_phase == "before"
         ):
             return False
-        
+
         return not (
             metadata.information_type == "prevention"
             and metadata.disaster_phase == "during"

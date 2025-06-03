@@ -92,18 +92,22 @@ class Document:
         if content_bytes is None:
             # Download if not in cache with proper headers and timeout
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'application/pdf,application/octet-stream,*/*',
-                'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection': 'keep-alive',
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/91.0.4472.124 Safari/537.36"
+                ),
+                "Accept": "application/pdf,application/octet-stream,*/*",
+                "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
             }
-            
+
             response = requests.get(
-                self._url, 
+                self._url,
                 headers=headers,
                 timeout=(10, 60),  # 10s connect, 60s read timeout
-                stream=True  # Stream large files
+                stream=True,  # Stream large files
             )
             response.raise_for_status()
             content_bytes = response.content
@@ -147,11 +151,11 @@ class Document:
         document_metadata = self._metadata_extractor.extract_document_metadata(
             content, self._url
         )
-        
+
         # Validate metadata
         if not self._metadata_extractor.validate_metadata(document_metadata):
             print(f"Warning: Invalid metadata extracted for {self._url}")
-        
+
         # Prepare base metadata for chunks
         base_metadata = {
             "url": self._url,
@@ -163,7 +167,7 @@ class Document:
 
         # Generate chunks with base metadata
         chunks = self._chunker.chunk_document(content, base_metadata)
-        
+
         # Enrich each chunk with specific metadata
         for chunk in chunks:
             chunk_metadata = self._metadata_extractor.extract_chunk_metadata(
@@ -184,20 +188,22 @@ class Document:
 
     @classmethod
     def _get_file_name(cls, response):
-        """Extract filename with priority: Content-Disposition > URL path > path segments."""
+        """Extract filename: Content-Disposition > URL path > path segments."""
         # 1. Try Content-Disposition header first
-        content_disposition = response.headers.get('Content-Disposition')
+        content_disposition = response.headers.get("Content-Disposition")
         if content_disposition:
-            filename = cls._extract_filename_from_content_disposition(content_disposition)
+            filename = cls._extract_filename_from_content_disposition(
+                content_disposition
+            )
             if filename:
                 return cls._sanitize_filename(filename)
-        
+
         # 2. Try URL path for files with extensions
         url_path = urlparse(response.url).path
         if url_path and "." in os.path.basename(url_path):
             filename = os.path.basename(url_path)
             return cls._sanitize_filename(filename)
-        
+
         # 3. Generate from path segments for HTML pages
         return cls._generate_filename_from_path(response.url)
 
@@ -209,20 +215,22 @@ class Document:
         if url_path and "." in os.path.basename(url_path):
             filename = os.path.basename(url_path)
             return cls._sanitize_filename(filename)
-        
+
         # Generate from path segments for HTML pages
         return cls._generate_filename_from_path(url)
-    
+
     @classmethod
-    def _extract_filename_from_content_disposition(cls, content_disposition: str) -> str | None:
+    def _extract_filename_from_content_disposition(
+        cls, content_disposition: str
+    ) -> str | None:
         """Extract filename from Content-Disposition header."""
         # Handle both filename and filename* (RFC 5987) formats
         patterns = [
-            r'filename\*=UTF-8\'\'([^;]+)',  # filename*=UTF-8''example.pdf
-            r'filename="([^"]+)"',           # filename="example.pdf"
-            r'filename=([^;]+)',             # filename=example.pdf
+            r"filename\*=UTF-8\'\'([^;]+)",  # filename*=UTF-8''example.pdf
+            r'filename="([^"]+)"',  # filename="example.pdf"
+            r"filename=([^;]+)",  # filename=example.pdf
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, content_disposition, re.IGNORECASE)
             if match:
@@ -230,53 +238,54 @@ class Document:
                 # URL decode if needed
                 try:
                     from urllib.parse import unquote
+
                     filename = unquote(filename)
-                except:
+                except Exception:
                     pass
                 return filename
-        
+
         return None
-    
+
     @classmethod
     def _generate_filename_from_path(cls, url: str) -> str:
         """Generate meaningful filename from URL path segments."""
         parsed = urlparse(url)
-        path_parts = [part for part in parsed.path.strip('/').split('/') if part]
-        
+        path_parts = [part for part in parsed.path.strip("/").split("/") if part]
+
         if not path_parts:
             # Use domain if no path
-            domain = parsed.netloc.replace('www.', '').split('.')[0]
+            domain = parsed.netloc.replace("www.", "").split(".")[0]
             return cls._sanitize_filename(f"{domain}.html")
-        
+
         # Use the last meaningful path segment
         meaningful_part = path_parts[-1]
-        
+
         # If it's too generic, combine with previous segment
-        generic_terms = {'index', 'default', 'home', 'page', 'orientacoes', 'pagina'}
+        generic_terms = {"index", "default", "home", "page", "orientacoes", "pagina"}
         if meaningful_part.lower() in generic_terms and len(path_parts) > 1:
             meaningful_part = f"{path_parts[-2]}-{meaningful_part}"
-        
+
         return cls._sanitize_filename(f"{meaningful_part}.html")
-    
+
     @classmethod
     def _sanitize_filename(cls, filename: str) -> str:
         """Sanitize filename for safe filesystem use."""
         # Remove or replace problematic characters
-        filename = re.sub(r'[<>:"/\\|?*]', '-', filename)
-        
+        filename = re.sub(r'[<>:"/\\|?*]', "-", filename)
+
         # Remove multiple consecutive dashes
-        filename = re.sub(r'-+', '-', filename)
-        
+        filename = re.sub(r"-+", "-", filename)
+
         # Remove leading/trailing dashes
-        filename = filename.strip('-')
-        
+        filename = filename.strip("-")
+
         # Ensure it's not empty
-        if not filename or filename == '.html':
-            filename = 'document.html'
-        
+        if not filename or filename == ".html":
+            filename = "document.html"
+
         # Limit length (keep extension)
         if len(filename) > 100:
             name, ext = os.path.splitext(filename)
             filename = name[:95] + ext
-        
+
         return filename

@@ -25,13 +25,13 @@ PROFILE_OPTIONS = {
 
 @dataclass
 class ChatMessage:
-    """Modelo de dados para mensagens do chat."""
+    """Data model for chat messages."""
 
     role: str  # "user" | "assistant"
-    content: str  # Conteúdo limpo para exibição ao usuário
+    content: str  # Clean content for user display
     timestamp: datetime
-    raw_content: str | None = None  # Conteúdo original com contexto (para debugging)
-    retrieval_context: str | None = None  # Para debugging/observabilidade
+    raw_content: str | None = None  # Original content with context (for debugging)
+    retrieval_context: str | None = None  # For debugging/observability
 
 
 @st.cache_resource(show_spinner=True)
@@ -45,15 +45,15 @@ def collection():
     return chroma.get_or_create_collection(name="disaster-documents")
 
 
-# === Utilitários para Gerenciamento de Histórico Local ===
+# === Local History Management Utilities ===
 
-# Configurações de memória
-MAX_CHAT_HISTORY = 50  # Máximo de mensagens no histórico
-CONTEXT_WINDOW = 10  # Mensagens usadas para contexto do LLM
+# Memory configuration
+MAX_CHAT_HISTORY = 50  # Maximum messages in history
+CONTEXT_WINDOW = 10  # Messages used for LLM context
 
 
 def init_chat_history():
-    """Inicializa o histórico do chat no session_state."""
+    """Initialize chat history in session_state."""
     if "chat_history" not in st.session_state:
         st.session_state.chat_history: list[ChatMessage] = []
 
@@ -64,18 +64,18 @@ def add_message_to_history(
     raw_content: str | None = None,
     retrieval_context: str | None = None,
 ):
-    """Adiciona uma mensagem ao histórico local com gerenciamento de memória."""
+    """Add a message to local history with memory management."""
     init_chat_history()
     message = ChatMessage(
         role=role,
-        content=content,  # Versão limpa para exibição
+        content=content,  # Clean version for display
         timestamp=datetime.now(),
-        raw_content=raw_content,  # Versão com contexto para debugging
+        raw_content=raw_content,  # Version with context for debugging
         retrieval_context=retrieval_context,
     )
     st.session_state.chat_history.append(message)
 
-    # Gerenciamento de memória: manter apenas as últimas mensagens
+    # Memory management: keep only the latest messages
     if len(st.session_state.chat_history) > MAX_CHAT_HISTORY:
         st.session_state.chat_history = st.session_state.chat_history[
             -MAX_CHAT_HISTORY:
@@ -83,23 +83,23 @@ def add_message_to_history(
 
 
 def get_chat_history() -> list[ChatMessage]:
-    """Retorna o histórico do chat."""
+    """Return chat history."""
     init_chat_history()
     return st.session_state.chat_history
 
 
 def clear_chat_history():
-    """Limpa o histórico do chat."""
+    """Clear chat history."""
     st.session_state.chat_history = []
 
 
 def get_conversation_context() -> str:
-    """Retorna o contexto da conversa para o LLM com janela otimizada."""
+    """Return conversation context for LLM with optimized window."""
     history = get_chat_history()
     if not history:
         return ""
 
-    # Usar janela de contexto configurável
+    # Use configurable context window
     recent_messages = history[-CONTEXT_WINDOW:]
     context_parts = []
 
@@ -110,13 +110,13 @@ def get_conversation_context() -> str:
 
 
 def render_local_chat_history():
-    """Renderiza o histórico local otimizado sem system prompts ou contexto RAG."""
+    """Render optimized local history without system prompts or RAG context."""
     history = get_chat_history()
 
-    # Renderização otimizada: evita re-renderizar todas as mensagens
+    # Optimized rendering: avoid re-rendering all messages
     for message in history:
         with st.chat_message(message.role, avatar=None):
-            st.markdown(message.content)  # Apenas o conteúdo limpo
+            st.markdown(message.content)  # Only clean content
 
 
 def format_profile_options(option):
@@ -140,7 +140,7 @@ def prompt_user_for_profile():
             "**Para melhor atendê-lo, por favor selecione seu perfil:**",
             options=PROFILE_OPTIONS.keys(),
             placeholder="Selecione seu perfil",
-            key="profile_selector",  # Mudando a chave para evitar conflito
+            key="profile_selector",  # Changed key to avoid conflict
             format_func=format_profile_options,
         )
 
@@ -149,7 +149,7 @@ def prompt_user_for_profile():
                 st.error("Por favor, selecione um perfil antes de continuar.")
             else:
                 st.session_state.user_profile = select_box
-                st.rerun()  # Forçar rerun após definir o perfil
+                st.rerun()  # Force rerun after setting profile
 
 
 @observe(name="document_retrieval_with_metadata")
@@ -329,7 +329,7 @@ def get_relevant_documents(documents):
 
 @observe
 def get_streaming_response(user_prompt):
-    """Nova função para streaming response com observabilidade Langfuse."""
+    """New function for streaming response with Langfuse observability."""
     langfuse_context.update_current_observation(session_id=st.session_state.session_id)
     prompt_client = st.session_state.prompt
 
@@ -338,7 +338,7 @@ def get_streaming_response(user_prompt):
         context=retrieved_docs, question=user_prompt
     )
 
-    # Usar chat.completions.create diretamente para streaming
+    # Use chat.completions.create directly for streaming
     stream = client().chat.completions.create(
         model=prompt_client.config["model"],
         temperature=prompt_client.config["temperature"],
@@ -346,7 +346,7 @@ def get_streaming_response(user_prompt):
         stream=True,
     )
 
-    # Generator para st.write_stream
+    # Generator for st.write_stream
     full_response = ""
     for chunk in stream:
         if chunk.choices[0].delta.content:
@@ -354,7 +354,7 @@ def get_streaming_response(user_prompt):
             full_response += content
             yield content
 
-    # Atualizar observabilidade Langfuse com resposta completa
+    # Update Langfuse observability with complete response
     try:
         langfuse_context.update_current_observation(
             input=user_prompt,
@@ -372,45 +372,45 @@ def get_streaming_response(user_prompt):
     except Exception as e:
         print(f"Erro ao atualizar observação Langfuse: {e}")
 
-    # Armazenar resposta completa no histórico local
+    # Store complete response in local history
     add_message_to_history(
         role="assistant",
         content=full_response,
-        raw_content=str(compiled_prompt),  # Para debugging
+        raw_content=str(compiled_prompt),  # For debugging
         retrieval_context=retrieved_docs,
     )
 
 
 def render_chat():
-    # Renderizar histórico local limpo
+    # Render clean local history
     render_local_chat_history()
 
     if prompt := st.chat_input("Digite sua mensagem..."):
         try:
-            # Adicionar mensagem do usuário ao histórico
+            # Add user message to history
             add_message_to_history(role="user", content=prompt)
 
-            # Mostrar mensagem do usuário
+            # Show user message
             with st.chat_message("user"):
                 st.markdown(prompt)
 
-            # Mostrar resposta streaming com feedback visual
+            # Show streaming response with visual feedback
             with st.chat_message("assistant"):
                 with st.spinner("🤔 Analisando documentos..."):
-                    # Breve delay para mostrar feedback de processamento
+                    # Brief delay to show processing feedback
                     import time
 
                     time.sleep(0.3)
 
-                # Stream da resposta
+                # Stream the response
                 st.write_stream(get_streaming_response(prompt))
-            
-            # Rerun para garantir que o histórico seja exibido
+
+            # Rerun to ensure history is displayed
             st.rerun()
         except Exception as e:
             st.error(f"Erro ao processar mensagem: {str(e)}")
             print(f"Erro detalhado: {e}")
-            # Não fazer rerun em caso de erro para manter o estado
+            # Don't rerun on error to maintain state
 
 
 def main():
@@ -420,32 +420,32 @@ def main():
         prompt_user_for_profile()
         return
 
-    # Header com informações da sessão
+    # Header with session information
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         profile_label = PROFILE_OPTIONS[st.session_state.user_profile]["label"]
         st.markdown(f"**Perfil:** {profile_label}")
 
     with col2:
-        # Informações de memória
+        # Memory information
         history_count = len(get_chat_history())
         st.markdown(f"**Mensagens:** {history_count}/{MAX_CHAT_HISTORY}")
 
     with col3:
-        # Botão para limpar histórico
+        # Button to clear history
         if st.button("🗑️ Limpar chat", type="secondary"):
             clear_chat_history()
             st.rerun()
 
     st.divider()
 
-    # Inicialização do session state (simplificado)
+    # Session state initialization (simplified)
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid.uuid4().hex
     if "prompt" not in st.session_state:
         st.session_state.prompt = get_prompt(st.session_state.user_profile)
 
-    # Inicializar sistema de histórico local
+    # Initialize local history system
     init_chat_history()
 
     render_chat()

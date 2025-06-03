@@ -1,5 +1,8 @@
 import sys
 import uuid
+from dataclasses import dataclass
+from datetime import datetime
+from typing import List, Optional
 
 # Fix for ChromaDB SQLite compatibility on Streamlit Cloud
 try:
@@ -21,6 +24,16 @@ PROFILE_OPTIONS = {
 }
 
 
+@dataclass
+class ChatMessage:
+    """Modelo de dados para mensagens do chat."""
+    role: str  # "user" | "assistant"
+    content: str  # Conteúdo limpo para exibição ao usuário
+    timestamp: datetime
+    raw_content: Optional[str] = None  # Conteúdo original com contexto (para debugging)
+    retrieval_context: Optional[str] = None  # Para debugging/observabilidade
+
+
 @st.cache_resource(show_spinner=True)
 def client():
     return OpenAI(api_key=st.secrets["openai_api_key"])
@@ -30,6 +43,58 @@ def client():
 def collection():
     chroma = chromadb.PersistentClient(path=".db/chroma")
     return chroma.get_or_create_collection(name="disaster-documents")
+
+
+# === Utilitários para Gerenciamento de Histórico Local ===
+
+def init_chat_history():
+    """Inicializa o histórico do chat no session_state."""
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history: List[ChatMessage] = []
+
+def add_message_to_history(role: str, content: str, raw_content: Optional[str] = None, retrieval_context: Optional[str] = None):
+    """Adiciona uma mensagem ao histórico local."""
+    init_chat_history()
+    message = ChatMessage(
+        role=role,
+        content=content,  # Versão limpa para exibição
+        timestamp=datetime.now(),
+        raw_content=raw_content,  # Versão com contexto para debugging
+        retrieval_context=retrieval_context
+    )
+    st.session_state.chat_history.append(message)
+
+def get_chat_history() -> List[ChatMessage]:
+    """Retorna o histórico do chat."""
+    init_chat_history()
+    return st.session_state.chat_history
+
+def clear_chat_history():
+    """Limpa o histórico do chat."""
+    st.session_state.chat_history = []
+
+def get_conversation_context() -> str:
+    """Retorna o contexto da conversa para o LLM."""
+    history = get_chat_history()
+    if not history:
+        return ""
+    
+    # Pega as últimas 10 mensagens para contexto
+    recent_messages = history[-10:]
+    context_parts = []
+    
+    for msg in recent_messages:
+        context_parts.append(f"{msg.role}: {msg.content}")
+    
+    return "\n".join(context_parts)
+
+def render_local_chat_history():
+    """Renderiza o histórico local sem system prompts ou contexto RAG."""
+    history = get_chat_history()
+    
+    for message in history:
+        with st.chat_message(message.role):
+            st.markdown(message.content)  # Apenas o conteúdo limpo
 
 
 def format_profile_options(option):
@@ -43,7 +108,7 @@ def get_prompt(profile):
 
 def prompt_user_for_profile():
     with st.form(key="user_profile_form"):
-        st.markdown("### 🚨 Assistente Virtual para Orientação em Desastres Naturais")
+        st.markdown("### Bem-vindo ao Assistente de Desastres Naturais")
         st.markdown(
             "Olá! Sou seu assistente virtual especializado em orientações "
             "para situações de emergência e desastres naturais."
@@ -289,10 +354,13 @@ def render_chat():
 
 
 def main():
-    st.title("Simple bot")
+    st.title("🚨 Assistente Virtual para Orientação em Desastres Naturais")
+    
     if "user_profile" not in st.session_state:
         prompt_user_for_profile()
         return
+    
+    # Inicialização do session state
     if "previous_response_id" not in st.session_state:
         st.session_state.previous_response_id = None
     if "last_response" not in st.session_state:
@@ -301,7 +369,10 @@ def main():
         st.session_state.session_id = uuid.uuid4().hex
     if "prompt" not in st.session_state:
         st.session_state.prompt = get_prompt(st.session_state.user_profile)
-
+    
+    # Inicializar novo sistema de histórico local
+    init_chat_history()
+    
     render_chat()
 
 

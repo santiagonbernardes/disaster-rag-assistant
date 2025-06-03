@@ -141,22 +141,6 @@ def prompt_user_for_profile():
                 st.session_state.user_profile = select_box
 
 
-def render_chat_history():
-    previous_response_id = st.session_state.previous_response_id
-    if previous_response_id is None:
-        st.empty()
-        return
-
-    all_messages = (
-        client().responses.input_items.list(previous_response_id, order="asc").data
-    )
-
-    for message in all_messages:
-        with st.chat_message(message.role):
-            st.markdown(message.content[0].text)
-
-    with st.chat_message("assistant"):
-        st.markdown(st.session_state.last_response)
 
 
 @observe(name="document_retrieval_with_metadata")
@@ -334,24 +318,6 @@ def get_relevant_documents(documents):
     return relevant_docs
 
 
-@observe
-def get_an_response(user_prompt):
-    langfuse_context.update_current_observation(session_id=st.session_state.session_id)
-    prompt_client = st.session_state.prompt
-
-    retrieved_docs = get_retrieved_documents(user_prompt)
-
-    compiled_prompt = prompt_client.compile(
-        context=retrieved_docs, question=user_prompt
-    )
-
-    return client().responses.create(
-        model=prompt_client.config["model"],
-        temperature=prompt_client.config["temperature"],
-        input=compiled_prompt,
-        previous_response_id=st.session_state.previous_response_id,
-        langfuse_prompt=prompt_client,
-    )
 
 
 @observe
@@ -381,17 +347,17 @@ def get_streaming_response(user_prompt):
             full_response += content
             yield content
 
-    # Criar trace manual para Langfuse com resposta completa
+    # Atualizar observabilidade Langfuse com resposta completa
     try:
         langfuse_context.update_current_observation(
             input=user_prompt,
             output=full_response,
             metadata={
                 "user_profile": st.session_state.get("user_profile"),
-                "retrieval_context_length": len(retrieved_docs)
-                if retrieved_docs
-                else 0,
+                "retrieval_context_length": len(retrieved_docs) if retrieved_docs else 0,
                 "streaming": True,
+                "session_id": st.session_state.session_id,
+                "chat_history_length": len(get_chat_history()),
             },
         )
     except Exception as e:
@@ -433,17 +399,13 @@ def main():
         prompt_user_for_profile()
         return
 
-    # Inicialização do session state
-    if "previous_response_id" not in st.session_state:
-        st.session_state.previous_response_id = None
-    if "last_response" not in st.session_state:
-        st.session_state.last_response = None
+    # Inicialização do session state (simplificado)
     if "session_id" not in st.session_state:
         st.session_state.session_id = uuid.uuid4().hex
     if "prompt" not in st.session_state:
         st.session_state.prompt = get_prompt(st.session_state.user_profile)
 
-    # Inicializar novo sistema de histórico local
+    # Inicializar sistema de histórico local
     init_chat_history()
 
     render_chat()

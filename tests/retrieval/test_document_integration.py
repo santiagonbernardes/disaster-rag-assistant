@@ -67,8 +67,10 @@ class TestDocumentIntegration:
 
         # Mock LlamaParse response
         mock_page = Mock()
-        mock_page.md = ("# Test Document\n\nEste é um guia de "
-                        "preparação para enchentes em área urbana.")
+        mock_page.md = (
+            "# Test Document\n\nEste é um guia de "
+            "preparação para enchentes em área urbana."
+        )
         mock_parse_result = Mock()
         mock_parse_result.pages = [mock_page]
         mock_llama_parse.parse.return_value = mock_parse_result

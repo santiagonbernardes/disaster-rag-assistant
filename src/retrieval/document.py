@@ -9,9 +9,12 @@ from langfuse.openai import OpenAI
 from llama_cloud_services import LlamaParse
 from pydantic import BaseModel, Field
 
+from src.core import get_logger
 from src.repositories.document_cache import DocumentCache
 from src.services.document_chunker import Chunk, DocumentChunker
 from src.services.metadata_extractor import MetadataExtractor
+
+logger = get_logger(__name__)
 
 
 class DocumentOutput(BaseModel):
@@ -154,7 +157,7 @@ class Document:
 
         # Validate metadata
         if not self._metadata_extractor.validate_metadata(document_metadata):
-            print(f"Warning: Invalid metadata extracted for {self._url}")
+            logger.warning(f"Invalid metadata extracted for {self._url}")
 
         # Prepare base metadata for chunks
         base_metadata = {

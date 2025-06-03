@@ -7,6 +7,10 @@ from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import OpenAI
 from pydantic import BaseModel, Field
 
+from src.core import get_logger
+
+logger = get_logger(__name__)
+
 
 class LLMMetadataResponse(BaseModel):
     """Structured output for LLM metadata extraction."""
@@ -196,7 +200,7 @@ class MetadataExtractor:
             "has_emergency_contacts": merged_data.get("has_emergency_contacts", False),
             "has_instructions": merged_data.get("has_instructions", False),
         }
-        print(f"Metadata extraction stats: {extraction_stats}")
+        logger.info(f"Metadata extraction stats: {extraction_stats}")
 
         # Create metadata object
         metadata = DocumentMetadata(
@@ -378,7 +382,7 @@ class MetadataExtractor:
             return output
 
         except Exception as e:
-            print(f"LLM extraction failed: {e}")
+            logger.error(f"LLM extraction failed: {e}", exc_info=True)
             return None
 
     def _calculate_confidence(self, metadata: dict, content: str) -> float:

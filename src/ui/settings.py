@@ -16,8 +16,11 @@ import tiktoken
 from langfuse.openai import OpenAI
 from llama_cloud_services import LlamaParse
 
+from src.core import get_logger
 from src.repositories.document_cache import DocumentCache
 from src.retrieval.document import Document
+
+logger = get_logger(__name__)
 
 st.header("Settings")
 
@@ -104,6 +107,7 @@ with st.form("settings_form", border=True):
                     add_log(message, "info")
 
                 try:
+                    logger.info(f"Starting document processing for URL: {url}")
                     # Initialize document
                     document = Document(
                         url,
@@ -133,8 +137,12 @@ with st.form("settings_form", border=True):
 
                     if chunks:
                         add_log(f"Generated {len(chunks)} chunks", "success")
+                        logger.info(f"Generated {len(chunks)} chunks for {url}")
                     else:
                         add_log("No chunks generated, using full document", "warning")
+                        logger.warning(
+                            f"No chunks generated for {url}, using full document"
+                        )
 
                     # Step 4: Index in ChromaDB
                     update_progress(4, "Indexing in ChromaDB...")
@@ -188,6 +196,9 @@ with st.form("settings_form", border=True):
                             ids=ids,
                         )
                         add_log(f"Indexed {len(chunks)} chunks in ChromaDB", "success")
+                        logger.info(
+                            f"Indexed {len(chunks)} chunks for {url} in ChromaDB"
+                        )
                     else:
                         # Fallback to full document if no chunks
                         collection.add(
@@ -196,6 +207,9 @@ with st.form("settings_form", border=True):
                             ids=[url],
                         )
                         add_log("Indexed full document in ChromaDB", "success")
+                        logger.info(
+                            f"Successfully indexed full document for {url} in ChromaDB"
+                        )
 
                     # Complete progress
                     update_progress(4, "Processing complete!")
@@ -235,6 +249,9 @@ with st.form("settings_form", border=True):
                 except Exception as e:
                     add_log(f"Error: {str(e)}", "error")
                     st.error(f"❌ Error processing document: {str(e)}")
+                    logger.error(
+                        f"Error processing document {url}: {str(e)}", exc_info=True
+                    )
 
 with st.container(border=True):
     st.markdown("### Indexed Documents")

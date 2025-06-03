@@ -16,6 +16,10 @@ import streamlit as st
 from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import OpenAI
 
+from src.core import get_logger
+
+logger = get_logger(__name__)
+
 PROFILE_OPTIONS = {
     "victim": {"label": "Vítima", "prompt": "victim"},
     "resident": {"label": "Residente", "prompt": "resident"},
@@ -165,7 +169,7 @@ def get_retrieved_documents(user_prompt):
             len(metadata_filter.get("$or", [])) if metadata_filter else 0
         ),
     }
-    print(f"Retrieval filter info: {filter_info}")
+    logger.debug(f"Retrieval filter info: {filter_info}")
 
     # Retrieve documents with optional filtering
     documents = retrieve_documents(user_prompt, metadata_filter)
@@ -183,7 +187,7 @@ def get_retrieved_documents(user_prompt):
             else 0
         ),
     }
-    print(f"Retrieval stats: {retrieval_stats}")
+    logger.info(f"Retrieval stats: {retrieval_stats}")
 
     if not relevant_docs:
         return ""
@@ -322,7 +326,7 @@ def get_relevant_documents(documents):
     )
     metadata_stats["docs_passed_similarity"] = len(relevant_docs)
 
-    print(f"Document filtering stats: {metadata_stats}")
+    logger.info(f"Document filtering stats: {metadata_stats}")
 
     return relevant_docs
 
@@ -370,7 +374,7 @@ def get_streaming_response(user_prompt):
             },
         )
     except Exception as e:
-        print(f"Erro ao atualizar observação Langfuse: {e}")
+        logger.warning(f"Error updating Langfuse observation: {e}")
 
     # Store complete response in local history
     add_message_to_history(
@@ -409,7 +413,7 @@ def render_chat():
             st.rerun()
         except Exception as e:
             st.error(f"Erro ao processar mensagem: {str(e)}")
-            print(f"Erro detalhado: {e}")
+            logger.error(f"Detailed error processing message: {e}", exc_info=True)
             # Don't rerun on error to maintain state
 
 

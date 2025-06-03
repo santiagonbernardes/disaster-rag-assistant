@@ -3,6 +3,10 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+from src.core import get_logger
+
+logger = get_logger(__name__)
+
 
 class DocumentCache:
     """Manages document caching on disk to avoid reprocessing."""
@@ -10,6 +14,7 @@ class DocumentCache:
     def __init__(self, cache_dir: Path | str = ".cache/documents"):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug(f"Initialized document cache at {self.cache_dir}")
 
     def get_document_hash(self, url: str) -> str:
         """Generate a unique hash for the URL."""
@@ -44,6 +49,7 @@ class DocumentCache:
 
         # Update metadata
         self._update_metadata(url, {"original_saved": datetime.now().isoformat()})
+        logger.debug(f"Saved original document for {url} ({len(content)} bytes)")
 
     def load_original(self, url: str) -> bytes | None:
         """Load the original document content."""
@@ -64,6 +70,7 @@ class DocumentCache:
 
         # Update metadata
         self._update_metadata(url, {"parsed_saved": datetime.now().isoformat()})
+        logger.debug(f"Saved parsed document for {url} ({len(markdown)} characters)")
 
     def load_parsed(self, url: str) -> str | None:
         """Load the parsed markdown content."""
@@ -106,6 +113,7 @@ class DocumentCache:
             url,
             {"chunks_saved": datetime.now().isoformat(), "chunk_count": len(chunks)},
         )
+        logger.debug(f"Saved {len(chunks)} chunks for {url}")
 
     def load_chunks(self, url: str) -> list | None:
         """Load document chunks."""
@@ -175,6 +183,7 @@ class DocumentCache:
             import shutil
 
             shutil.rmtree(doc_path)
+            logger.info(f"Cleared cache for {url}")
 
     def get_cache_size(self) -> dict:
         """Get cache statistics."""

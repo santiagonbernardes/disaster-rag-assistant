@@ -322,10 +322,10 @@ class MetadataExtractor:
             {truncated_content}
             """
             
-            response = self.llm_client.responses.create(
+            response = self.llm_client.responses.parse(
                 model="gpt-4o-mini",
                 input=prompt,
-                response_format=LLMMetadataResponse
+                text_format=LLMMetadataResponse
             )
 
             return response.output_parsed

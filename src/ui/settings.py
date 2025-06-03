@@ -76,18 +76,15 @@ with st.form("settings_form", border=True):
                     "info",
                 )
 
-                # Determine processing steps
+                # Determine processing steps (always use 4 steps for consistency)
+                total_steps = 4  # Download/Load, Parse/Load, Chunk, Index
                 if has_chunks and has_parsed:
-                    total_steps = 2  # Load parsed, load chunks
                     status_msg = "📄 Loading from cache..."
                 elif has_parsed:
-                    total_steps = 3  # Load parsed, generate chunks, index
                     status_msg = "📄 Loading parsed document and generating chunks..."
                 elif has_original:
-                    total_steps = 4  # Parse, save parsed, generate chunks, index
                     status_msg = "🔄 Processing cached document..."
                 else:
-                    total_steps = 5  # Download, parse, save, chunk, index
                     status_msg = "⬇️ Downloading and processing document..."
 
                 # Create progress container
@@ -99,7 +96,7 @@ with st.form("settings_form", border=True):
                 start_time = time.time()
 
                 def update_progress(step: int, message: str):
-                    progress = step / total_steps
+                    progress = min(step / total_steps, 1.0)  # Ensure progress never exceeds 1.0
                     progress_bar.progress(progress, text=message)
                     status_text.text(
                         f"Step {step}/{total_steps}: {message}"
@@ -117,23 +114,20 @@ with st.form("settings_form", border=True):
                         cache=cache,
                     )
 
-                    # Process based on cache status
+                    # Step 1: Download/Load document
                     if not has_original:
                         update_progress(1, "Downloading document...")
+                    else:
+                        update_progress(1, "Loading document from cache...")
 
-                    # Get markdown content (triggers download/parse if needed)
+                    # Step 2: Parse document
                     markdown_content = document.markdown()
+                    if not has_parsed:
+                        update_progress(2, "Parsing document with LlamaParse...")
+                    else:
+                        update_progress(2, "Loaded parsed document from cache...")
 
-                    if not has_parsed and has_original:
-                        update_progress(
-                            2, "Parsing document with LlamaParse..."
-                        )
-                    elif has_parsed:
-                        update_progress(
-                            2, "Loaded parsed document from cache"
-                        )
-
-                    # Get chunks
+                    # Step 3: Process chunks
                     update_progress(3, "Processing chunks...")
                     chunks = document.chunks()
 
@@ -144,7 +138,7 @@ with st.form("settings_form", border=True):
                             "No chunks generated, using full document", "warning"
                         )
 
-                    # Add chunks to ChromaDB
+                    # Step 4: Index in ChromaDB
                     update_progress(4, "Indexing in ChromaDB...")
 
                     if chunks:
@@ -204,8 +198,8 @@ with st.form("settings_form", border=True):
                         )
                         add_log("Indexed full document in ChromaDB", "success")
 
-                    # Complete progress
-                    update_progress(total_steps, "Processing complete!")
+                    # Complete progress  
+                    update_progress(4, "Processing complete!")
 
                     # Calculate processing time
                     processing_time = time.time() - start_time

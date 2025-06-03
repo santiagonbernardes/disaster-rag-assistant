@@ -140,7 +140,7 @@ def prompt_user_for_profile():
             "**Para melhor atendê-lo, por favor selecione seu perfil:**",
             options=PROFILE_OPTIONS.keys(),
             placeholder="Selecione seu perfil",
-            key="user_profile",
+            key="profile_selector",  # Mudando a chave para evitar conflito
             format_func=format_profile_options,
         )
 
@@ -149,6 +149,7 @@ def prompt_user_for_profile():
                 st.error("Por favor, selecione um perfil antes de continuar.")
             else:
                 st.session_state.user_profile = select_box
+                st.rerun()  # Forçar rerun após definir o perfil
 
 
 @observe(name="document_retrieval_with_metadata")
@@ -380,31 +381,36 @@ def get_streaming_response(user_prompt):
     )
 
 
-@st.fragment
 def render_chat():
     # Renderizar histórico local limpo
     render_local_chat_history()
 
     if prompt := st.chat_input("Digite sua mensagem..."):
-        # Adicionar mensagem do usuário ao histórico
-        add_message_to_history(role="user", content=prompt)
+        try:
+            # Adicionar mensagem do usuário ao histórico
+            add_message_to_history(role="user", content=prompt)
 
-        # Mostrar mensagem do usuário
-        with st.chat_message("user"):
-            st.markdown(prompt)
+            # Mostrar mensagem do usuário
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-        # Mostrar resposta streaming com feedback visual
-        with st.chat_message("assistant"):
-            with st.spinner("🤔 Analisando documentos..."):
-                # Breve delay para mostrar feedback de processamento
-                import time
+            # Mostrar resposta streaming com feedback visual
+            with st.chat_message("assistant"):
+                with st.spinner("🤔 Analisando documentos..."):
+                    # Breve delay para mostrar feedback de processamento
+                    import time
 
-                time.sleep(0.3)
+                    time.sleep(0.3)
 
-            # Stream da resposta
-            st.write_stream(get_streaming_response(prompt))
-
-        st.rerun(scope="fragment")
+                # Stream da resposta
+                st.write_stream(get_streaming_response(prompt))
+            
+            # Rerun para garantir que o histórico seja exibido
+            st.rerun()
+        except Exception as e:
+            st.error(f"Erro ao processar mensagem: {str(e)}")
+            print(f"Erro detalhado: {e}")
+            # Não fazer rerun em caso de erro para manter o estado
 
 
 def main():

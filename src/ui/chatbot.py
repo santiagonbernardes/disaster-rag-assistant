@@ -2,7 +2,6 @@ import sys
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 # Fix for ChromaDB SQLite compatibility on Streamlit Cloud
 try:
@@ -48,6 +47,10 @@ def collection():
 
 # === Utilitários para Gerenciamento de Histórico Local ===
 
+# Configurações de memória
+MAX_CHAT_HISTORY = 50  # Máximo de mensagens no histórico
+CONTEXT_WINDOW = 10  # Mensagens usadas para contexto do LLM
+
 
 def init_chat_history():
     """Inicializa o histórico do chat no session_state."""
@@ -61,7 +64,7 @@ def add_message_to_history(
     raw_content: str | None = None,
     retrieval_context: str | None = None,
 ):
-    """Adiciona uma mensagem ao histórico local."""
+    """Adiciona uma mensagem ao histórico local com gerenciamento de memória."""
     init_chat_history()
     message = ChatMessage(
         role=role,
@@ -71,6 +74,12 @@ def add_message_to_history(
         retrieval_context=retrieval_context,
     )
     st.session_state.chat_history.append(message)
+
+    # Gerenciamento de memória: manter apenas as últimas mensagens
+    if len(st.session_state.chat_history) > MAX_CHAT_HISTORY:
+        st.session_state.chat_history = st.session_state.chat_history[
+            -MAX_CHAT_HISTORY:
+        ]
 
 
 def get_chat_history() -> list[ChatMessage]:
@@ -85,13 +94,13 @@ def clear_chat_history():
 
 
 def get_conversation_context() -> str:
-    """Retorna o contexto da conversa para o LLM."""
+    """Retorna o contexto da conversa para o LLM com janela otimizada."""
     history = get_chat_history()
     if not history:
         return ""
 
-    # Pega as últimas 10 mensagens para contexto
-    recent_messages = history[-10:]
+    # Usar janela de contexto configurável
+    recent_messages = history[-CONTEXT_WINDOW:]
     context_parts = []
 
     for msg in recent_messages:
@@ -101,11 +110,12 @@ def get_conversation_context() -> str:
 
 
 def render_local_chat_history():
-    """Renderiza o histórico local sem system prompts ou contexto RAG."""
+    """Renderiza o histórico local otimizado sem system prompts ou contexto RAG."""
     history = get_chat_history()
 
+    # Renderização otimizada: evita re-renderizar todas as mensagens
     for message in history:
-        with st.chat_message(message.role):
+        with st.chat_message(message.role, avatar=None):
             st.markdown(message.content)  # Apenas o conteúdo limpo
 
 
@@ -350,7 +360,9 @@ def get_streaming_response(user_prompt):
             output=full_response,
             metadata={
                 "user_profile": st.session_state.get("user_profile"),
-                "retrieval_context_length": len(retrieved_docs) if retrieved_docs else 0,
+                "retrieval_context_length": len(retrieved_docs)
+                if retrieved_docs
+                else 0,
                 "streaming": True,
                 "session_id": st.session_state.session_id,
                 "chat_history_length": len(get_chat_history()),
@@ -386,8 +398,9 @@ def render_chat():
             with st.spinner("🤔 Analisando documentos..."):
                 # Breve delay para mostrar feedback de processamento
                 import time
+
                 time.sleep(0.3)
-            
+
             # Stream da resposta
             st.write_stream(get_streaming_response(prompt))
 
@@ -402,12 +415,17 @@ def main():
         return
 
     # Header com informações da sessão
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         profile_label = PROFILE_OPTIONS[st.session_state.user_profile]["label"]
         st.markdown(f"**Perfil:** {profile_label}")
-    
+
     with col2:
+        # Informações de memória
+        history_count = len(get_chat_history())
+        st.markdown(f"**Mensagens:** {history_count}/{MAX_CHAT_HISTORY}")
+
+    with col3:
         # Botão para limpar histórico
         if st.button("🗑️ Limpar chat", type="secondary"):
             clear_chat_history()

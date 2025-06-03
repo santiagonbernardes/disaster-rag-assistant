@@ -20,7 +20,8 @@ def main():
 
     Antes da Enchente:
     Prepare um kit de emergência com água, alimentos não perecíveis, medicamentos, 
-    documentos importantes e lanternas. Identifique rotas de evacuação e abrigos próximos. 
+    documentos importantes e lanternas. Identifique rotas de evacuação e abrigos 
+    próximos. 
     Mantenha-se informado através de rádio ou televisão sobre alertas meteorológicos.
 
     Durante a Enchente:

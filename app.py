@@ -19,14 +19,16 @@ if __name__ == "__main__":
     # This file is the entrypoint of the application.
     # Add important configuration here like integrations,
     # logging, etc.
-    
+
     # Set up logging
     log_level = os.getenv("LOG_LEVEL", "INFO")
     setup_logging(level=log_level)
     logger = get_logger(__name__)
     env = st.secrets["langfuse_environment"]
-    
-    logger.info(f"Starting Disaster RAG Assistant v{get_app_version()} in {env} environment")
+
+    logger.info(
+        f"Starting Disaster RAG Assistant v{get_app_version()} in {env} environment"
+    )
 
     langfuse_context.configure(
         secret_key=st.secrets["langfuse_secret_key"],
@@ -60,6 +62,8 @@ if __name__ == "__main__":
                 icon="🛠️",
             )
         )
-        logger.info("Development environment detected - Knowledge Management page enabled")
+        logger.info(
+            "Development environment detected - Knowledge Management page enabled"
+        )
 
     st.navigation(pages).run()

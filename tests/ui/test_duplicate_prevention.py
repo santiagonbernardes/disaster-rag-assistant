@@ -1,8 +1,6 @@
-import tempfile
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
 
 import pytest
-import streamlit as st
 
 
 class TestDuplicatePrevention:

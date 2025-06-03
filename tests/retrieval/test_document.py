@@ -124,9 +124,15 @@ class TestDocumentWithCache:
         test_cases = [
             ("https://example.com/document.pdf", "document.pdf"),
             ("https://example.com/path/to/file.docx", "file.docx"),
-            ("https://example.com/no-extension", "no-extension.html"),  # Path segment becomes filename
+            (
+                "https://example.com/no-extension",
+                "no-extension.html",
+            ),  # Path segment becomes filename
             ("https://example.com/", "example.html"),  # Domain becomes filename
-            ("https://spsemprealerta.sp.gov.br/orientacoes/tempestades/", "tempestades.html"),
+            (
+                "https://spsemprealerta.sp.gov.br/orientacoes/tempestades/",
+                "tempestades.html",
+            ),
         ]
 
         for url, expected_filename in test_cases:

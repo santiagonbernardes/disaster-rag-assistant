@@ -97,6 +97,46 @@ def clear_chat_history():
     st.session_state.chat_history = []
 
 
+def generate_fallback_response() -> str:
+    """Generate fallback response when no relevant documents are found."""
+    user_profile = st.session_state.get("user_profile", "victim")
+    
+    fallback_messages = {
+        "victim": (
+            "Não encontrei informações específicas sobre sua situação na "
+            "documentação disponível. Para orientações imediatas e emergenciais, "
+            "recomendo entrar em contato com:\n\n"
+            "🚨 **Defesa Civil**: 199\n"
+            "🚨 **Bombeiros**: 193\n"
+            "🚨 **SAMU**: 192\n"
+            "🚨 **Polícia**: 190\n\n"
+            "Em caso de risco iminente, não hesite em buscar ajuda imediatamente."
+        ),
+        "resident": (
+            "Não encontrei documentação específica sobre este tópico na base de "
+            "conhecimento. Para informações sobre prevenção e preparação para "
+            "desastres naturais, recomendo:\n\n"
+            "📞 **Defesa Civil Municipal**: Consulte o órgão da sua cidade\n"
+            "📞 **Defesa Civil Estadual**: 199\n"
+            "🌐 **Portal da Defesa Civil**: Acesse o site oficial do seu estado\n\n"
+            "Tente reformular sua pergunta ou seja mais específico sobre o tipo "
+            "de desastre ou situação."
+        ),
+        "family": (
+            "Não localizei informações sobre este assunto na documentação "
+            "disponível. Para orientações e contatos de emergência:\n\n"
+            "📞 **Defesa Civil**: 199\n"
+            "📞 **Bombeiros**: 193\n"
+            "📞 **Cruz Vermelha**: Consulte o núcleo da sua região\n"
+            "📞 **Assistência Social**: Procure o CRAS mais próximo\n\n"
+            "Tente fazer uma pergunta mais específica sobre o tipo de desastre "
+            "ou situação que você precisa de orientação."
+        )
+    }
+    
+    return fallback_messages.get(user_profile, fallback_messages["victim"])
+
+
 def get_conversation_context() -> str:
     """Return conversation context for LLM with optimized window."""
     history = get_chat_history()
@@ -248,7 +288,7 @@ def get_profile_based_filter():
 def retrieve_documents(user_prompt, metadata_filter=None):
     query_params = {
         "query_texts": user_prompt,
-        "n_results": 5,  # Increased to get more candidates for filtering
+        "n_results": 7
     }
 
     # Add metadata filter if provided
@@ -265,7 +305,7 @@ def get_relevant_documents(documents):
     # 0 is identical. As far away from it, the more different the
     # document is from the query.
 
-    SIMILARITY_THRESHOLD = 1.3
+    SIMILARITY_THRESHOLD = 0.995 # after local testing, this seems to be a good threshold
     relevant_docs = []
 
     # Handle metadatas if available
@@ -338,6 +378,41 @@ def get_streaming_response(user_prompt):
     prompt_client = st.session_state.prompt
 
     retrieved_docs = get_retrieved_documents(user_prompt)
+    
+    # Check if no relevant documents were found
+    if not retrieved_docs or len(retrieved_docs.strip()) == 0:
+        # Return fallback response immediately
+        fallback_response = generate_fallback_response()
+        
+        # Update Langfuse observability with fallback response
+        try:
+            langfuse_context.update_current_observation(
+                input=user_prompt,
+                output=fallback_response,
+                metadata={
+                    "user_profile": st.session_state.get("user_profile"),
+                    "retrieval_context_length": 0,
+                    "fallback_response": True,
+                    "streaming": True,
+                    "session_id": st.session_state.session_id,
+                    "chat_history_length": len(get_chat_history()),
+                },
+            )
+        except Exception as e:
+            logger.warning(f"Error updating Langfuse observation: {e}")
+        
+        # Store fallback response in local history
+        add_message_to_history(
+            role="assistant",
+            content=fallback_response,
+            raw_content="[FALLBACK_RESPONSE]",
+            retrieval_context="",
+        )
+        
+        # Yield fallback response for streaming
+        yield from fallback_response
+        return
+
     compiled_prompt = prompt_client.compile(
         context=retrieved_docs, question=user_prompt
     )
@@ -368,6 +443,7 @@ def get_streaming_response(user_prompt):
                 "retrieval_context_length": len(retrieved_docs)
                 if retrieved_docs
                 else 0,
+                "fallback_response": False,
                 "streaming": True,
                 "session_id": st.session_state.session_id,
                 "chat_history_length": len(get_chat_history()),

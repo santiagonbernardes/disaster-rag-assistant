@@ -173,7 +173,7 @@ class TestDocumentIntegration:
         mock_llm_client,
         mock_llama_parse,
         mock_cache,
-        capfd,
+        caplog,
     ):
         """Test that invalid metadata triggers a warning."""
         # Mock Langfuse prompt
@@ -224,13 +224,12 @@ class TestDocumentIntegration:
             cache=mock_cache,
         )
 
-        # Process document and capture output
+        # Process document
         with patch("requests.get", return_value=mock_response):
             chunks = document.chunks()
 
-        # Check that warning was printed
-        captured = capfd.readouterr()
-        assert "Warning: Invalid metadata extracted" in captured.out
+        # Check that warning was logged
+        assert "Invalid metadata extracted" in caplog.text
 
         # Verify chunks were still created despite invalid metadata
         assert len(chunks) > 0

@@ -342,17 +342,39 @@ class MetadataExtractor:
                 content[:max_length] if len(content) > max_length else content
             )
             
-            prompt = f"""
-            Analise este documento de resposta a desastres naturais e extraia
-            os metadados solicitados.
+            # System prompt - role and context
+            system_prompt = """
+            Você é um especialista em classificação de documentos de resposta a desastres naturais brasileiros.
             
-            Conteúdo do documento:
-            {truncated_content}
+            Sua tarefa é extrair metadados estruturados de documentos, considerando:
+            - Categoria PRINCIPAL do desastre (apenas uma)
+            - Público-alvo PRIMÁRIO (apenas um)
+            - Tipo de informação e contexto do documento
+            
+            EXEMPLO DE ANÁLISE:
+            
+            Documento: "Kit de emergência pessoal para enchentes - orientações para famílias"
+            
+            Raciocínio:
+            - Tipo: "guide" (orientações gerais, não manual técnico)
+            - Categoria: "flood" (enchentes mencionadas especificamente)  
+            - Informação: "preparation" (kit de emergência é preparação prévia)
+            - Audiência: "family" (famílias mencionadas diretamente)
+            - Área: "general" (não especifica urbano/rural)
+            - Fase: "before" (preparação prévia ao evento)
+            
+            Analise cada documento seguindo esse mesmo processo de raciocínio estruturado.
             """
+            
+            # User prompt - specific document
+            user_prompt = f"Analise este documento e extraia os metadados estruturados:\n\n{truncated_content}"
             
             response = self.llm_client.responses.parse(
                 model="gpt-4o-mini",
-                input=prompt,
+                input=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
                 text_format=LLMMetadataResponse
             )
 

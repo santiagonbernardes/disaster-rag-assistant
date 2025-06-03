@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -183,14 +184,99 @@ class Document:
 
     @classmethod
     def _get_file_name(cls, response):
+        """Extract filename with priority: Content-Disposition > URL path > path segments."""
+        # 1. Try Content-Disposition header first
+        content_disposition = response.headers.get('Content-Disposition')
+        if content_disposition:
+            filename = cls._extract_filename_from_content_disposition(content_disposition)
+            if filename:
+                return cls._sanitize_filename(filename)
+        
+        # 2. Try URL path for files with extensions
         url_path = urlparse(response.url).path
-        if url_path and "." in url_path:
-            return os.path.basename(url_path)
-        return "document.html"
+        if url_path and "." in os.path.basename(url_path):
+            filename = os.path.basename(url_path)
+            return cls._sanitize_filename(filename)
+        
+        # 3. Generate from path segments for HTML pages
+        return cls._generate_filename_from_path(response.url)
 
     @classmethod
     def _get_file_name_from_url(cls, url: str):
+        """Extract filename from URL when loading from cache."""
+        # Try URL path for files with extensions
         url_path = urlparse(url).path
-        if url_path and "." in url_path:
-            return os.path.basename(url_path)
-        return "document.html"
+        if url_path and "." in os.path.basename(url_path):
+            filename = os.path.basename(url_path)
+            return cls._sanitize_filename(filename)
+        
+        # Generate from path segments for HTML pages
+        return cls._generate_filename_from_path(url)
+    
+    @classmethod
+    def _extract_filename_from_content_disposition(cls, content_disposition: str) -> str | None:
+        """Extract filename from Content-Disposition header."""
+        # Handle both filename and filename* (RFC 5987) formats
+        patterns = [
+            r'filename\*=UTF-8\'\'([^;]+)',  # filename*=UTF-8''example.pdf
+            r'filename="([^"]+)"',           # filename="example.pdf"
+            r'filename=([^;]+)',             # filename=example.pdf
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, content_disposition, re.IGNORECASE)
+            if match:
+                filename = match.group(1).strip()
+                # URL decode if needed
+                try:
+                    from urllib.parse import unquote
+                    filename = unquote(filename)
+                except:
+                    pass
+                return filename
+        
+        return None
+    
+    @classmethod
+    def _generate_filename_from_path(cls, url: str) -> str:
+        """Generate meaningful filename from URL path segments."""
+        parsed = urlparse(url)
+        path_parts = [part for part in parsed.path.strip('/').split('/') if part]
+        
+        if not path_parts:
+            # Use domain if no path
+            domain = parsed.netloc.replace('www.', '').split('.')[0]
+            return cls._sanitize_filename(f"{domain}.html")
+        
+        # Use the last meaningful path segment
+        meaningful_part = path_parts[-1]
+        
+        # If it's too generic, combine with previous segment
+        generic_terms = {'index', 'default', 'home', 'page', 'orientacoes', 'pagina'}
+        if meaningful_part.lower() in generic_terms and len(path_parts) > 1:
+            meaningful_part = f"{path_parts[-2]}-{meaningful_part}"
+        
+        return cls._sanitize_filename(f"{meaningful_part}.html")
+    
+    @classmethod
+    def _sanitize_filename(cls, filename: str) -> str:
+        """Sanitize filename for safe filesystem use."""
+        # Remove or replace problematic characters
+        filename = re.sub(r'[<>:"/\\|?*]', '-', filename)
+        
+        # Remove multiple consecutive dashes
+        filename = re.sub(r'-+', '-', filename)
+        
+        # Remove leading/trailing dashes
+        filename = filename.strip('-')
+        
+        # Ensure it's not empty
+        if not filename or filename == '.html':
+            filename = 'document.html'
+        
+        # Limit length (keep extension)
+        if len(filename) > 100:
+            name, ext = os.path.splitext(filename)
+            filename = name[:95] + ext
+        
+        return filename

@@ -99,7 +99,7 @@ class TestChatbotFiltering:
 
         # Verify query was called with correct parameters
         mock_collection.query.assert_called_once_with(
-            query_texts="test query", n_results=5, where=metadata_filter
+            query_texts="test query", n_results=7, where=metadata_filter
         )
 
         assert result["ids"] == [["doc1", "doc2"]]
@@ -119,7 +119,7 @@ class TestChatbotFiltering:
 
         # Verify query was called without where clause
         mock_collection.query.assert_called_once_with(
-            query_texts="test query", n_results=5
+            query_texts="test query", n_results=7
         )
 
     def test_get_relevant_documents_with_enriched_metadata(self):

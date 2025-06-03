@@ -100,7 +100,7 @@ def clear_chat_history():
 def generate_fallback_response() -> str:
     """Generate fallback response when no relevant documents are found."""
     user_profile = st.session_state.get("user_profile", "victim")
-    
+
     fallback_messages = {
         "victim": (
             "Não encontrei informações específicas sobre sua situação na "
@@ -131,9 +131,9 @@ def generate_fallback_response() -> str:
             "📞 **Assistência Social**: Procure o CRAS mais próximo\n\n"
             "Tente fazer uma pergunta mais específica sobre o tipo de desastre "
             "ou situação que você precisa de orientação."
-        )
+        ),
     }
-    
+
     return fallback_messages.get(user_profile, fallback_messages["victim"])
 
 
@@ -286,10 +286,7 @@ def get_profile_based_filter():
 
 @observe(name="retrieval")
 def retrieve_documents(user_prompt, metadata_filter=None):
-    query_params = {
-        "query_texts": user_prompt,
-        "n_results": 7
-    }
+    query_params = {"query_texts": user_prompt, "n_results": 7}
 
     # Add metadata filter if provided
     if metadata_filter:
@@ -305,7 +302,7 @@ def get_relevant_documents(documents):
     # 0 is identical. As far away from it, the more different the
     # document is from the query.
 
-    SIMILARITY_THRESHOLD = 0.995 # after local testing, this seems to be a good threshold
+    SIMILARITY_THRESHOLD = 0.995  # after local testing, good threshold
     relevant_docs = []
 
     # Handle metadatas if available
@@ -378,12 +375,12 @@ def get_streaming_response(user_prompt):
     prompt_client = st.session_state.prompt
 
     retrieved_docs = get_retrieved_documents(user_prompt)
-    
+
     # Check if no relevant documents were found
     if not retrieved_docs or len(retrieved_docs.strip()) == 0:
         # Return fallback response immediately
         fallback_response = generate_fallback_response()
-        
+
         # Update Langfuse observability with fallback response
         try:
             langfuse_context.update_current_observation(
@@ -400,7 +397,7 @@ def get_streaming_response(user_prompt):
             )
         except Exception as e:
             logger.warning(f"Error updating Langfuse observation: {e}")
-        
+
         # Store fallback response in local history
         add_message_to_history(
             role="assistant",
@@ -408,7 +405,7 @@ def get_streaming_response(user_prompt):
             raw_content="[FALLBACK_RESPONSE]",
             retrieval_context="",
         )
-        
+
         # Yield fallback response for streaming
         yield from fallback_response
         return

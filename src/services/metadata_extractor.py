@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
+from langfuse.decorators import observe
 from langfuse.openai import OpenAI
 from pydantic import BaseModel, Field
 
@@ -148,6 +149,7 @@ class MetadataExtractor:
             "low": ["informação", "conhecimento", "conscientização"],
         }
     
+    @observe(name="metadata_extraction")
     def extract_document_metadata(self, content: str, url: str) -> DocumentMetadata:
         """
         Extract comprehensive metadata from a document.
@@ -173,6 +175,21 @@ class MetadataExtractor:
         # Calculate confidence score
         confidence = self._calculate_confidence(merged_data, content)
         
+        # Log extraction results for observability
+        extraction_stats = {
+            "url": url,
+            "content_length": len(content),
+            "deterministic_fields": len(deterministic_data),
+            "llm_extraction_success": llm_data is not None,
+            "confidence_score": confidence,
+            "disaster_categories_found": len(
+                merged_data.get("disaster_categories", [])
+            ),
+            "has_emergency_contacts": merged_data.get("has_emergency_contacts", False),
+            "has_instructions": merged_data.get("has_instructions", False),
+        }
+        print(f"Metadata extraction stats: {extraction_stats}")
+        
         # Create metadata object
         metadata = DocumentMetadata(
             document_type=merged_data.get("document_type", "guide"),
@@ -195,6 +212,7 @@ class MetadataExtractor:
         
         return metadata
     
+    @observe(name="chunk_metadata_extraction")
     def extract_chunk_metadata(self, chunk_content: str) -> dict:
         """
         Extract chunk-specific metadata.
@@ -246,6 +264,7 @@ class MetadataExtractor:
         
         return metadata
     
+    @observe(name="deterministic_extraction")
     def _extract_deterministic(self, content: str, url: str) -> dict:
         """Extract metadata using deterministic rules."""
         metadata = {}
@@ -285,6 +304,7 @@ class MetadataExtractor:
         
         return metadata
     
+    @observe(name="llm_metadata_extraction")
     def _extract_with_llm(self, content: str) -> LLMMetadataResponse | None:
         """Extract metadata using LLM classification with structured outputs."""
         try:
@@ -337,6 +357,7 @@ class MetadataExtractor:
         
         return min(confidence, 1.0)
     
+    @observe(name="metadata_validation")
     def validate_metadata(self, metadata: DocumentMetadata) -> bool:
         """
         Validate extracted metadata for consistency and completeness.

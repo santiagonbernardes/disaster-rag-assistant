@@ -8,14 +8,15 @@ Disaster RAG Assistant is an intelligent virtual assistant using RAG (Retrieval-
 
 ## Current Project Status
 
-The project has completed implementation of an improved document ingestion system with caching and chunking capabilities. Key features include:
+The project has completed implementation of a comprehensive metadata extraction system for intelligent document retrieval. Key features include:
 
-- **Document Cache Infrastructure**: File-based caching system for original documents, parsed content, and chunks
-- **UI Integration**: Settings interface with progress tracking and cache management
-- **Parsed Document Caching**: Avoids redundant LlamaParse API calls
-- **Document Chunking System**: Configurable text splitting with overlap for better retrieval
-- **ChromaDB Integration**: Duplicate checking and cache synchronization
-- **Enhanced UI**: Progress bars, detailed logging, and cache statistics
+- **Metadata Extraction System**: Automatic extraction of structured metadata using deterministic rules and LLM classification
+- **Document Cache Infrastructure**: File-based caching system for original documents, parsed content, and enriched chunks
+- **UI Integration**: Settings interface with progress tracking and metadata quality validation
+- **Intelligent Retrieval**: Profile-based filtering using extracted metadata (victim, resident, family)
+- **ChromaDB Integration**: Metadata-enriched indexing with duplicate checking and cache synchronization
+- **Langfuse Observability**: Comprehensive tracing of metadata extraction and retrieval processes
+- **Enhanced UI**: Progress bars, detailed logging, cache statistics, and metadata validation warnings
 
 ## Architecture
 
@@ -27,9 +28,10 @@ The application uses:
 - **Langfuse** for observability and prompt management
 
 Key architectural decisions:
-- RAG pattern: Retrieves relevant documents from ChromaDB based on user queries, then augments LLM responses with this context
-- User profiles (victim/resident/family) determine which prompt template to use from Langfuse
-- Documents are indexed with embeddings for semantic search with a similarity threshold of 1.3
+- **Enhanced RAG pattern**: Retrieves relevant documents from ChromaDB using semantic search + metadata filtering, then augments LLM responses with contextually relevant content
+- **Intelligent Profiling**: User profiles (victim/resident/family) determine both prompt templates from Langfuse and automatic metadata filtering for document retrieval
+- **Metadata-Enhanced Indexing**: Documents are indexed with embeddings + structured metadata (document type, disaster category, urgency level, target audience, etc.)
+- **Multi-Stage Filtering**: Similarity threshold of 1.3 combined with profile-based metadata filters for improved precision
 
 ## Development Commands
 
@@ -121,10 +123,11 @@ Before committing changes, always:
 - `src/ui/settings.py`: Admin interface for indexing new documents (only available in dev environment)
 - `.streamlit/secrets.toml.SAMPLE`: Template for API keys configuration
 
-### Document Processing
-- `src/retrieval/document.py`: Document processing with LlamaParse and cache integration
-- `src/repositories/document_cache.py`: Cache system for documents (original, parsed & chunks)
-- `src/services/document_chunker.py`: Chunking system for splitting documents
+### Document Processing & Metadata Extraction
+- `src/retrieval/document.py`: Document processing with LlamaParse, cache integration, and metadata extraction
+- `src/repositories/document_cache.py`: Cache system for documents (original, parsed & enriched chunks)
+- `src/services/document_chunker.py`: Chunking system for splitting documents with metadata support
+- `src/services/metadata_extractor.py`: Automatic metadata extraction using deterministic rules and LLM classification
 
 ### Cache Structure
 ```
@@ -133,7 +136,7 @@ Before committing changes, always:
 │   ├── metadata.json    # URL, timestamps, processing status
 │   ├── original.bin     # Original downloaded document
 │   ├── parsed.md        # LlamaParse output
-│   └── chunks.json      # Chunked document segments
+│   └── chunks.json      # Chunked document segments with enriched metadata
 ```
 
 ## Important Implementation Details
@@ -146,26 +149,35 @@ Before committing changes, always:
    - Langfuse prompt caching
    - Unique session IDs for tracking
 
-3. **Document Retrieval**: 
-   - Queries ChromaDB for top 2 most similar documents
-   - Filters results by distance threshold (< 1.3)
-   - Formats retrieved documents for prompt augmentation
+3. **Intelligent Document Retrieval**: 
+   - Queries ChromaDB for top 5 most similar documents with automatic metadata filtering
+   - Profile-based filtering (victim: urgent response info, resident: prevention/preparation, family: contacts/recovery)
+   - Filters results by distance threshold (< 1.3) and relevance scoring
+   - Formats retrieved documents with metadata context for prompt augmentation
 
 4. **Environment-based Features**: Settings page for document indexing only appears when `langfuse_environment` is set to "dev"
 
-5. **Caching System**:
-   - Three-level cache: original → parsed → chunks
-   - Avoids re-downloads and re-processing
+5. **Advanced Caching System**:
+   - Three-level cache: original → parsed → enriched chunks with metadata
+   - Avoids re-downloads, re-processing, and re-extraction of metadata
    - Uses URL hash for unique identification
-   - Tracks processing status in metadata
+   - Tracks processing status and metadata quality in cache metadata
    - ChromaDB duplicate checking prevents redundant indexing
-   - Cache management UI with cleanup options
+   - Cache management UI with cleanup options and metadata statistics
 
-6. **Chunking Configuration**:
+6. **Metadata Extraction System**:
+   - **Deterministic extraction**: URL patterns, text regex, structural elements detection
+   - **LLM-based classification**: Document type, disaster category, target audience, urgency level
+   - **Validation**: Consistency checks and confidence scoring
+   - **Chunk-specific metadata**: Section type, instruction density, emergency contacts detection
+   - **Profile-based filtering**: Automatic filtering based on user profile (victim/resident/family)
+
+7. **Enhanced Chunking Configuration**:
    - Default chunk size: 1000 characters
    - Default overlap: 200 characters
    - Preserves sentence boundaries
    - Maintains chunk position tracking
+   - Enriches chunks with document-level and chunk-specific metadata
 
 ## Configuration
 
@@ -175,6 +187,10 @@ Copy `.streamlit/secrets.toml.SAMPLE` to `.streamlit/secrets.toml` and fill in y
 - LlamaCloud API key for document parsing
 
 ## Development Tools and Best Practices
+
+### Important File Modification Rules
+
+**CHANGELOG.md**: Do not modify this file directly. The changelog is managed automatically via conventional commits and release automation. Any manual changes will be overwritten during the release process.
 
 ### Task Management with Claude Code
 When working on complex features, use Claude Code's built-in tools:

@@ -82,9 +82,37 @@ def render_chat_history():
         st.markdown(st.session_state.last_response)
 
 
+@observe(name="document_retrieval_with_metadata")
 def get_retrieved_documents(user_prompt):
-    documents = retrieve_documents(user_prompt)
+    # Get user profile-based metadata filter
+    metadata_filter = get_profile_based_filter()
+    
+    # Log filter information for observability
+    filter_info = {
+        "user_profile": st.session_state.get("user_profile", "none"),
+        "filter_applied": metadata_filter is not None,
+        "filter_conditions": (
+            len(metadata_filter.get("$or", [])) if metadata_filter else 0
+        )
+    }
+    print(f"Retrieval filter info: {filter_info}")
+    
+    # Retrieve documents with optional filtering
+    documents = retrieve_documents(user_prompt, metadata_filter)
     relevant_docs = get_relevant_documents(documents)
+
+    # Log retrieval results
+    retrieval_stats = {
+        "total_candidates": (
+            len(documents.get("ids", [[]])[0]) if documents.get("ids") else 0
+        ),
+        "relevant_docs_found": len(relevant_docs),
+        "filter_effectiveness": (
+            len(relevant_docs) / max(len(documents.get("ids", [[]])[0]), 1)
+            if documents.get("ids") else 0
+        )
+    }
+    print(f"Retrieval stats: {retrieval_stats}")
 
     if not relevant_docs:
         return ""
@@ -99,9 +127,60 @@ def get_retrieved_documents(user_prompt):
     return "\n\n".join(formatted_docs)
 
 
+def get_profile_based_filter():
+    """
+    Generate metadata filter based on user profile.
+    
+    Returns:
+        Dictionary with ChromaDB where conditions or None
+    """
+    if "user_profile" not in st.session_state:
+        return None
+    
+    user_profile = st.session_state.user_profile
+    
+    # Profile-based filtering
+    profile_filters = {
+        "victim": {
+            # Victims need immediate response information
+            "$or": [
+                {"information_type": "response"},
+                {"urgency_level": {"$in": ["critical", "high"]}},
+                {"target_audience": {"$in": ["victim"]}},
+            ]
+        },
+        "resident": {
+            # Residents need preparation and prevention info
+            "$or": [
+                {"information_type": {"$in": ["prevention", "preparation"]}},
+                {"target_audience": {"$in": ["resident", "victim"]}},
+            ]
+        },
+        "family": {
+            # Families need general guidance and contact information
+            "$or": [
+                {"target_audience": {"$in": ["family", "victim"]}},
+                {"has_emergency_contacts": True},
+                {"information_type": {"$in": ["response", "recovery"]}},
+            ]
+        },
+    }
+    
+    return profile_filters.get(user_profile)
+
+
 @observe(name="retrieval")
-def retrieve_documents(user_prompt):
-    return collection().query(query_texts=user_prompt, n_results=2)
+def retrieve_documents(user_prompt, metadata_filter=None):
+    query_params = {
+        "query_texts": user_prompt,
+        "n_results": 5  # Increased to get more candidates for filtering
+    }
+    
+    # Add metadata filter if provided
+    if metadata_filter:
+        query_params["where"] = metadata_filter
+    
+    return collection().query(**query_params)
 
 
 @observe(name="retrieval_filtering")
@@ -117,6 +196,17 @@ def get_relevant_documents(documents):
     # Handle metadatas if available
     metadatas = documents.get("metadatas", [[{} for _ in documents["ids"][0]]])
 
+    # Track metadata for observability
+    metadata_stats = {
+        "total_candidates": (
+            len(documents.get("ids", [[]])[0]) if documents.get("ids") else 0
+        ),
+        "documents_with_metadata": 0,
+        "documents_with_confidence": 0,
+        "avg_confidence": 0,
+        "metadata_fields_found": set()
+    }
+
     documents_data = zip(
         documents["ids"][0],
         documents["distances"][0],
@@ -125,7 +215,18 @@ def get_relevant_documents(documents):
         strict=True,
     )
 
+    confidence_scores = []
+    
     for doc_id, distance, document, metadata in documents_data:
+        # Track metadata statistics
+        if metadata:
+            metadata_stats["documents_with_metadata"] += 1
+            metadata_stats["metadata_fields_found"].update(metadata.keys())
+            
+            if "confidence_score" in metadata:
+                metadata_stats["documents_with_confidence"] += 1
+                confidence_scores.append(metadata["confidence_score"])
+        
         if distance < SIMILARITY_THRESHOLD:
             # Extract URL from metadata or from doc_id
             url = metadata.get("url", doc_id.split("#")[0] if "#" in doc_id else doc_id)
@@ -139,6 +240,18 @@ def get_relevant_documents(documents):
                 doc_info["chunk_info"] = f"(Trecho {chunk_idx + 1} de {total_chunks})"
 
             relevant_docs.append(doc_info)
+
+    # Calculate final statistics
+    if confidence_scores:
+        metadata_stats["avg_confidence"] = (
+            sum(confidence_scores) / len(confidence_scores)
+        )
+    metadata_stats["metadata_fields_found"] = list(
+        metadata_stats["metadata_fields_found"]
+    )
+    metadata_stats["docs_passed_similarity"] = len(relevant_docs)
+    
+    print(f"Document filtering stats: {metadata_stats}")
 
     return relevant_docs
 

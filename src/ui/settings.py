@@ -155,7 +155,7 @@ with st.form("settings_form", border=True):
 
                         for chunk in chunks:
                             documents.append(chunk.content)
-                            # Include original URL and chunk-specific metadata
+                            # Include original URL and all chunk metadata
                             chunk_metadata = {
                                 "url": url,
                                 "chunk_index": chunk.index,
@@ -164,7 +164,24 @@ with st.form("settings_form", border=True):
                                 ),
                                 "start_char": chunk.start_char,
                                 "end_char": chunk.end_char,
+                                # Include all extracted metadata
+                                **{
+                                    k: v for k, v in chunk.metadata.items() 
+                                    if (k not in ["chunk_index", "total_chunks"] 
+                                        and v is not None)
+                                }
                             }
+                            
+                            # Validate metadata quality
+                            if "confidence_score" in chunk_metadata:
+                                confidence = chunk_metadata["confidence_score"]
+                                if confidence < 0.5:
+                                    msg = (
+                                        f"Low confidence metadata "
+                                        f"(chunk {chunk.index}): {confidence:.2f}"
+                                    )
+                                    add_log(msg, "warning")
+                            
                             metadatas.append(chunk_metadata)
                             # Create unique ID for each chunk
                             ids.append(f"{url}#chunk_{chunk.index}")

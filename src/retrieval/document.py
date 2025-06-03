@@ -3,6 +3,7 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 import requests
+from langfuse.decorators import observe
 from langfuse.openai import OpenAI
 from llama_cloud_services import LlamaParse
 from pydantic import BaseModel, Field
@@ -125,6 +126,7 @@ class Document:
         # Create document output
         self._document_output = self._create_document(content, chunks)
 
+    @observe(name="document_chunk_generation")
     def _generate_chunks(self, content: str) -> list[Chunk]:
         """Generate chunks from parsed content and save to cache."""
         # Extract document-level metadata

@@ -13,9 +13,9 @@ class ContextFormatter:
     # are intentionally excluded to avoid confusing the LLM with unnecessary information
     METADATA_MAPPING = {
         "source_authority": "source_authority",  # Used for citation names
-        "urgency_level": "urgency",              # Used to prioritize critical info
-        "disaster_category": "disaster_type",    # Provides disaster context
-        "url": "url",                            # Essential for reference links
+        "urgency_level": "urgency",  # Used to prioritize critical info
+        "disaster_category": "disaster_type",  # Provides disaster context
+        "url": "url",  # Essential for reference links
     }
 
     def format_documents_as_xml(self, documents: list[dict[str, Any]]) -> str:

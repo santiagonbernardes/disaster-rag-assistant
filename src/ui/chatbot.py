@@ -17,6 +17,7 @@ from langfuse.decorators import langfuse_context, observe
 from langfuse.openai import OpenAI
 
 from src.core import get_logger
+from src.services.context_formatter import ContextFormatter
 
 logger = get_logger(__name__)
 
@@ -160,7 +161,7 @@ def render_local_chat_history():
     # Optimized rendering: avoid re-rendering all messages
     for message in history:
         with st.chat_message(message.role, avatar=None):
-            st.markdown(message.content)  # Only clean content
+            st.markdown(message.content, unsafe_allow_html=True)  # Render sources
 
 
 def format_profile_options(option):
@@ -232,14 +233,9 @@ def get_retrieved_documents(user_prompt):
     if not relevant_docs:
         return ""
 
-    formatted_docs = []
-    for i, doc in enumerate(relevant_docs):
-        chunk_info = doc.get("chunk_info", "")
-        doc_header = f"Documento {i + 1} - URL: {doc['url']} {chunk_info}"
-        doc_content = doc["content"]
-        formatted_docs.append(f"{doc_header}\n{doc_content}")
-
-    return "\n\n".join(formatted_docs)
+    # Format documents as XML using the new formatter
+    formatter = ContextFormatter()
+    return formatter.format_documents_as_xml(relevant_docs)
 
 
 def get_profile_based_filter():
@@ -343,7 +339,11 @@ def get_relevant_documents(documents):
             # Extract URL from metadata or from doc_id
             url = metadata.get("url", doc_id.split("#")[0] if "#" in doc_id else doc_id)
 
-            doc_info = {"url": url, "content": document}
+            doc_info = {
+                "url": url,
+                "content": document,
+                "metadata": metadata,  # Include full metadata for XML formatting
+            }
 
             # Add chunk info if this is a chunk
             if "#chunk_" in doc_id:

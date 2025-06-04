@@ -10,11 +10,11 @@ Assistente virtual inteligente que utiliza arquitetura RAG (Retrieval-Augmented 
 
 ## Membros do Grupo
 
-| Nome | RM | GitHub |
-|-----|-----|---------|
-| [Cristiano Washington Dias] | RM555992 | [https://github.com/criswd](https://github.com/criswd) |
-| [Mizael Vieira Bezerra] | RM555796 | [https://github.com/mizaelvieira1](https://github.com/mizaelvieira1) |
-| [Santiago Bernardes] | RM557447 | [https://github.com/santiagonbernardes](https://github.com/santiagonbernardes) |
+| Nome | RM |
+|-----|-----|
+| [Cristiano Washington Dias](https://github.com/criswd) | RM555992 |
+| [Mizael Vieira Bezerra](https://github.com/mizaelvieira1) | RM555796 |
+| [Santiago Bernardes](https://github.com/santiagonbernardes) | RM557447 |
 
 ## Como Rodar Localmente
 

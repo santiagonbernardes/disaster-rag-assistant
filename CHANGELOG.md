@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/santiagonbernardes/disaster-rag-assistant/compare/v1.0.0...v1.0.1) (2025-06-04)
+
+
+### Bug Fixes
+
+* doc citation and readme ([#10](https://github.com/santiagonbernardes/disaster-rag-assistant/issues/10)) ([423af96](https://github.com/santiagonbernardes/disaster-rag-assistant/commit/423af96487905d01c2cb274f01c6b3e6da1d3dda))
+
 ## [1.0.0](https://github.com/santiagonbernardes/disaster-rag-assistant/compare/v0.2.1...v1.0.0) (2025-06-03)
 
 
